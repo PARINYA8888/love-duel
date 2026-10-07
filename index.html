@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0b0d12">
+<title>LOVE DUEL — เกมวัดใจ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">LD</span><div><b>LOVE DUEL</b><small>เกมวัดใจคนที่เรารัก</small></div></div>
+    <div id="connection" class="connection offline">ยังไม่เชื่อมต่อ</div>
+  </header>
+
+  <main>
+    <section id="home" class="screen active">
+      <div class="hero">
+        <div class="hero-icon">♥</div>
+        <p class="eyebrow">TWO PLAYER · ONLINE</p>
+        <h1>รู้ใจกัน<br><strong>แค่ไหน?</strong></h1>
+        <p class="muted">คนหนึ่งเลือกคำตอบแบบลับ อีกคนต้องเดา<br>ก่อนเฉลย มาดูกันว่าใครรู้ใจใครมากกว่ากัน</p>
+      </div>
+      <div class="card form-card">
+        <label>ชื่อของคุณ</label>
+        <input id="name" maxlength="18" placeholder="เช่น ออม" autocomplete="nickname">
+        <button class="primary" id="createBtn"><span>＋</span> สร้างห้อง</button>
+        <div class="or">หรือ</div>
+        <label>รหัสห้อง</label>
+        <input id="roomInput" maxlength="6" placeholder="เช่น 7K9X" autocapitalize="characters">
+        <button class="secondary" id="joinBtn">เข้าร่วมห้อง</button>
+      </div>
+    </section>
+
+    <section id="lobby" class="screen">
+      <div class="section-head"><p class="eyebrow">ห้องเกม</p><h2>พร้อมหรือยัง?</h2></div>
+      <div class="room-code"><span>รหัสห้อง</span><strong id="roomCode">----</strong><button id="copyRoom">คัดลอก</button></div>
+      <div class="players">
+        <div class="player-slot" id="p1"><div class="avatar">1</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
+        <div class="vs">VS</div>
+        <div class="player-slot" id="p2"><div class="avatar">2</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
+      </div>
+      <div class="card settings">
+        <label>จำนวนคำถาม</label>
+        <div class="seg" id="rounds"><button data-value="10">10</button><button data-value="20" class="selected">20</button><button data-value="30">30</button><button data-value="40">40</button></div>
+        <label>คนเลือกคำตอบ</label>
+        <div class="seg mode" id="mode"><button data-value="alternate" class="selected">สลับกัน</button><button data-value="random">สุ่ม</button><button data-value="host">ฉัน</button><button data-value="guest">อีกคน</button></div>
+      </div>
+      <button class="primary" id="readyBtn">พร้อมเล่น</button>
+      <p id="lobbyHint" class="hint">ส่งรหัสห้องให้อีกคน แล้วรอให้เข้ามา</p>
+    </section>
+
+    <section id="game" class="screen">
+      <div class="game-top">
+        <div><small>คำถามที่</small><strong id="qNo">1 / 20</strong></div>
+        <div class="scores"><span id="scoreMe">0</span><em>:</em><span id="scoreOther">0</span></div>
+      </div>
+      <div id="roleBanner" class="role-banner"></div>
+      <div class="card question-card">
+        <div class="category" id="category">รู้จักกัน</div>
+        <h2 id="question">กำลังเตรียมคำถาม...</h2>
+        <div class="choices" id="choices"></div>
+      </div>
+      <div id="talk" class="talk card hidden">
+        <div class="talk-title"><span class="talk-icon">◌</span><div><b>ถึงเวลาคุยกัน</b><small id="talkPrompt">ทำไมถึงคิดว่าฉันเลือกข้อนี้?</small></div><strong id="timer">30</strong></div>
+        <textarea id="talkText" maxlength="160" placeholder="คุยกันได้ตรงนี้... (ไม่บังคับ)"></textarea>
+        <button class="secondary" id="revealBtn">ฉันพร้อมเฉลย</button>
+      </div>
+      <div id="reveal" class="card reveal hidden">
+        <div class="reveal-grid"><div><small>คำตอบจริง</small><strong id="actual">-</strong></div><div><small>คำตอบที่ทาย</small><strong id="guess">-</strong></div></div>
+        <div id="resultText" class="result-text"></div>
+        <button class="primary" id="nextBtn">ไปข้อต่อไป</button>
+      </div>
+    </section>
+
+    <section id="result" class="screen">
+      <div class="result-hero"><p class="eyebrow">GAME OVER</p><h2>ผลของเรา</h2><div class="percent" id="percent">0%</div><p id="resultSummary"></p></div>
+      <div class="card final-score"><div><small>คะแนนของคุณ</small><strong id="finalMe">0</strong></div><div><small>คะแนนอีกคน</small><strong id="finalOther">0</strong></div></div>
+      <div class="card history"><h3>สรุปคำถาม</h3><div id="historyList"></div></div>
+      <button class="primary" id="playAgain">เล่นอีกครั้ง</button>
+      <button class="link-btn" id="homeBtn">กลับหน้าหลัก</button>
+    </section>
+  </main>
+</div>
+<div id="toast" class="toast"></div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
