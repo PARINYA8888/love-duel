@@ -68,8 +68,7 @@ if(state.chooser!==myRole())return;
 $('#roleBanner').textContent='เลือกคำตอบแล้ว · รอให้อีกคนทาย';
 toast('เลือกคำตอบแล้ว ส่งให้อีกคนทายแบบลับแล้ว');
 }else if(state.phase==='guess'&&state.chooser!==myRole()){
-state.guess=n;lockChoices();clearInterval(timerId);send('GUESS',{n});
-$('#revealNowBtn').classList.remove('hidden');
+state.guess=n;lockChoices();clearInterval(timerId);$('#revealNowBtn').classList.remove('hidden');
 $('#roleBanner').textContent='เลือกคำตอบแล้ว · กด “เฉลยเลย” ได้ทันที';
 $('#talkPrompt').textContent='ตรวจคำตอบให้เรียบร้อย แล้วกด “เฉลยเลย”';
 if(isHost)reveal();
@@ -95,7 +94,7 @@ $('#mode').onclick=e=>{if(e.target.dataset.value){selectedMode=e.target.dataset.
 $('#createBtn').onclick=()=>setupHost();$('#joinBtn').onclick=()=>setupGuest();
 $('#copyRoom').onclick=()=>navigator.clipboard?.writeText(room).then(()=>toast('คัดลอกรหัสห้องแล้ว'));
 $('#readyBtn').onclick=()=>{const role=myRole();state.players.find(p=>p.id===role).ready=true;updateLobby();send('READY',{role});if(isHost&&state.players.length===2&&state.players.every(p=>p.ready)){startGame()}};
-$('#revealBtn').onclick=()=>{};$('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&state.guess){send('GUESS',{n:state.guess});if(isHost)reveal()}};$('#nextBtn').onclick=next;
+$('#revealBtn').onclick=()=>{};$('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&state.guess){send('GUESS',{n:state.guess});if(isHost)reveal();}};$('#nextBtn').onclick=next;
 $('#playAgain').onclick=()=>{if(isHost){state=makeState();other=state.players[1].name;show('lobby');updateLobby();send('LOBBY',{state})}else toast('ให้เจ้าของห้องกดเล่นอีกครั้ง')};
 $('#homeBtn').onclick=()=>location.reload();
 updateLobby();
