@@ -1,0 +1,19 @@
+{
+  "name": "LOVE DUEL — เกมวัดใจ",
+  "short_name": "LOVE DUEL",
+  "lang": "th",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080a0f",
+  "theme_color": "#ff5c7a",
+  "description": "เกมคำถามสำหรับคู่รักสองคน เล่นบนมือถือ",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

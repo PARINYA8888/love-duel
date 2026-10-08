@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>LOVE DUEL — เกมวัดใจ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -22,8 +28,14 @@
         <div class="hero-icon">♥</div>
         <p class="eyebrow">TWO PLAYER · ONLINE</p>
         <h1>รู้ใจกัน<br><strong>แค่ไหน?</strong></h1>
-        <p class="muted">คนหนึ่งเลือกคำตอบแบบลับ อีกคนต้องเดา<br>ก่อนเฉลย มาดูกันว่าใครรู้ใจใครมากกว่ากัน</p>
+        <p class="muted">เลือกได้ทั้งโหมดสลับกันทาย หรือแอบตอบพร้อมกัน<br>แล้วมาดูกันว่าใครรู้ใจใครมากกว่ากัน</p>
       </div>
+      <div class="card resume-card hidden" id="resumePanel">
+        <div><b>กลับไปเล่นต่อไหม?</b><p class="muted" id="resumeSummary"></p></div>
+        <button class="primary" id="resumeBtn">กลับเข้าห้องเดิม</button>
+        <button class="link-btn" id="forgetSessionBtn">ล้างห้องที่จำไว้</button>
+      </div>
+      <button type="button" class="secondary install-button hidden" id="installBtn">ติดตั้ง LOVE DUEL บนหน้าจอ</button>
       <div class="card form-card">
         <label for="name">ชื่อของคุณ</label>
         <input id="name" maxlength="18" placeholder="เช่น ออม" autocomplete="nickname" enterkeyhint="done">
@@ -43,6 +55,15 @@
         <div class="vs">VS</div>
         <div class="player-slot" id="p2"><div class="avatar">2</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
       </div>
+      <div class="card couple-theme" id="coupleThemePanel">
+        <div class="setting-heading"><div><label for="coupleName">ธีมของเรา</label><small>ตั้งชื่อและสีประจำห้อง</small></div><span class="theme-preview" id="themePreview">♥</span></div>
+        <label class="visually-hidden" for="coupleName">ชื่อคู่</label>
+        <input id="coupleName" maxlength="24" value="คู่ของเรา" placeholder="เช่น เจ้าหมี & เจ้ากระต่าย" autocomplete="off">
+        <div class="theme-options" id="themeOptions" role="group" aria-label="เลือกรูปแบบอีโมจิและสี">
+          <div class="theme-emoji" aria-label="เลือกอีโมจิ"><button type="button" data-emoji="♥" aria-label="หัวใจ">♥</button><button type="button" data-emoji="💕" aria-label="หัวใจคู่">💕</button><button type="button" data-emoji="🐻" aria-label="หมี">🐻</button><button type="button" data-emoji="🐰" aria-label="กระต่าย">🐰</button><button type="button" data-emoji="🌙" aria-label="พระจันทร์">🌙</button><button type="button" data-emoji="☀️" aria-label="พระอาทิตย์">☀️</button></div>
+          <div class="theme-colors" aria-label="เลือกสี"><button type="button" data-theme="rose" aria-label="ชมพู" class="color-rose"></button><button type="button" data-theme="violet" aria-label="ม่วง" class="color-violet"></button><button type="button" data-theme="ocean" aria-label="ฟ้า" class="color-ocean"></button><button type="button" data-theme="mint" aria-label="เขียวมิ้นต์" class="color-mint"></button></div>
+        </div>
+      </div>
       <div class="card settings">
         <div class="setting-heading">
           <div><label>หมวดคำถาม</label><small>เลือกได้หลายหมวดตามสไตล์ของเรา</small></div>
@@ -59,8 +80,11 @@
         <p id="questionCount" class="question-count" aria-live="polite"></p>
         <label>จำนวนคำถาม</label>
         <div class="seg rounds" id="rounds" role="group" aria-label="จำนวนคำถาม"><button type="button" data-value="5">5</button><button type="button" data-value="10">10</button><button type="button" data-value="15">15</button><button type="button" data-value="20" class="selected">20</button><button type="button" data-value="30">30</button><button type="button" data-value="40">40</button></div>
-        <label>คนเลือกคำตอบ</label>
-        <div class="seg mode" id="mode" role="group" aria-label="คนเลือกคำตอบ"><button type="button" data-value="alternate" class="selected">สลับกัน</button><button type="button" data-value="random">สุ่ม</button><button type="button" data-value="host">ฉัน</button><button type="button" data-value="guest">อีกคน</button></div>
+        <label>รูปแบบการตอบ</label>
+        <div class="seg mode-style" id="answerMode" role="group" aria-label="รูปแบบการตอบ"><button type="button" data-value="turns" class="selected">สลับกันทาย</button><button type="button" data-value="simultaneous">ตอบพร้อมกัน</button></div>
+        <div id="chooserSettings"><label>คนเลือกคำตอบในโหมดสลับกัน</label>
+          <div class="seg mode" id="mode" role="group" aria-label="คนเลือกคำตอบ"><button type="button" data-value="alternate" class="selected">สลับกัน</button><button type="button" data-value="random">สุ่ม</button><button type="button" data-value="host">ฉัน</button><button type="button" data-value="guest">อีกคน</button></div>
+        </div>
       </div>
       <button class="primary" id="readyBtn">พร้อมเล่น</button>
       <p id="lobbyHint" class="hint">ส่งรหัสห้องให้อีกคน แล้วรอให้เข้ามา</p>
@@ -76,20 +100,22 @@
         <div class="category" id="category">รู้จักกัน</div>
         <h2 id="question">กำลังเตรียมคำถาม...</h2>
         <div class="choices" id="choices"></div>
+        <p id="simProgress" class="sim-progress hidden" aria-live="polite"></p>
       </div>
       <div id="talk" class="talk card hidden">
         <div class="talk-title"><span class="talk-icon">◌</span><div><b>ถึงเวลาคุยกัน</b><small id="talkPrompt">เลือกคำตอบที่คิดว่าอีกคนเลือก ภายใน 60 วินาที</small></div><strong id="timer">60</strong></div>
         <div class="talk-wait">เลือก 1–4 แล้วกดปุ่มด้านล่างเพื่อเฉลยทันที หากหมดเวลา ระบบจะเฉลยให้อัตโนมัติ</div><button class="primary reveal-now" id="revealNowBtn">เฉลยเลย</button>
       </div>
       <div id="reveal" class="card reveal hidden">
-        <div class="reveal-grid"><div><small>คำตอบจริง</small><strong id="actual">-</strong></div><div><small>คำตอบที่ทาย</small><strong id="guess">-</strong></div></div>
+        <div class="reveal-grid" id="classicReveal"><div><small>คำตอบจริง</small><strong id="actual">-</strong></div><div><small>คำตอบที่ทาย</small><strong id="guess">-</strong></div></div>
+        <div class="sim-reveal hidden" id="simReveal"></div>
         <div id="resultText" class="result-text"></div>
         <button class="primary" id="nextBtn">ไปข้อต่อไป</button>
       </div>
     </section>
 
     <section id="result" class="screen">
-      <div class="result-hero"><p class="eyebrow">GAME OVER</p><h2>ผลของเรา</h2><div class="percent" id="percent">0%</div><p id="resultSummary"></p></div>
+      <div class="result-hero"><p class="eyebrow">GAME OVER</p><h2 id="resultTitle">ผลของเรา</h2><div class="percent" id="percent">0%</div><p id="resultSummary"></p></div>
       <div class="card final-score"><div><small>คะแนนของคุณ</small><strong id="finalMe">0</strong></div><div><small>คะแนนอีกคน</small><strong id="finalOther">0</strong></div></div>
       <div class="card history"><h3>สรุปคำถาม</h3><div id="historyList"></div></div>
       <button class="primary" id="playAgain">เล่นอีกครั้ง</button>

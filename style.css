@@ -94,3 +94,46 @@ button:focus-visible,input:focus-visible{outline:2px solid #ff9cab;outline-offse
 @media(max-width:370px){
   .category-copy strong{font-size:10px}
 }
+
+/* Couple identity, private simultaneous answers, and resumable mobile sessions. */
+.resume-card{margin:0 0 14px;padding:16px}
+.resume-card b{font-size:16px}
+.resume-card .muted{margin:5px 0 13px;font-size:12px}
+.resume-card .link-btn{margin-bottom:0}
+.install-button{margin:0 0 12px}
+.brand{min-width:0;flex:1}
+.brand>div{min-width:0}
+.brand small{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.connection{flex:none}
+.couple-theme{margin-bottom:12px}
+.couple-theme .setting-heading{margin-bottom:10px}
+.couple-theme input{width:100%;height:48px;padding:0 13px;border:1px solid var(--line);border-radius:12px;background:#0c0f15;color:var(--text);font-size:16px}
+.theme-preview{width:40px;height:40px;display:grid;place-items:center;border-radius:13px;background:#202530;color:var(--accent);font-size:22px}
+.theme-options{display:grid;gap:11px;margin-top:12px}
+.theme-emoji,.theme-colors{display:flex;align-items:center;gap:8px}
+.theme-emoji button{width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px;background:#0d1016;color:var(--text);font-size:19px}
+.theme-emoji button.selected{border-color:var(--accent);background:#2a1920}
+.theme-colors button{width:32px;height:32px;border:3px solid #171b24;border-radius:50%;box-shadow:0 0 0 1px #505664}
+.theme-colors button.selected{box-shadow:0 0 0 2px #fff}
+.color-rose{background:linear-gradient(135deg,#ff5c7a,#ff8a65)}
+.color-violet{background:linear-gradient(135deg,#a985ff,#ff7eaa)}
+.color-ocean{background:linear-gradient(135deg,#55b8ff,#6ce0d5)}
+.color-mint{background:linear-gradient(135deg,#51d6ad,#b7dd6a)}
+.mode-style{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mode-style button{min-height:50px;padding:7px 5px;font-size:12px;line-height:1.3}
+.sim-progress{margin:12px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#0d1016;color:var(--muted);font-size:12px;text-align:center}
+.sim-reveal{display:grid;gap:9px}
+.sim-answer-card{min-width:0;padding:13px;border:1px solid var(--line);border-radius:14px;background:#0d1016}
+.sim-answer-card.correct{border-color:#285443}
+.sim-answer-card.miss{border-color:#493039}
+.sim-answer-card small,.sim-answer-card strong,.sim-answer-card span{display:block}
+.sim-answer-card small{color:var(--muted);font-size:11px}
+.sim-answer-card strong{margin:5px 0;font-size:19px;line-height:1.35;overflow-wrap:anywhere}
+.sim-answer-card span{color:var(--muted);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+@media(max-width:370px){
+  .theme-emoji{gap:5px}
+  .theme-emoji button{width:39px;height:39px}
+  .couple-theme{padding:13px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
