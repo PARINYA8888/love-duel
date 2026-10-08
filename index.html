@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0d12">
 <title>LOVE DUEL — เกมวัดใจ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,12 +25,12 @@
         <p class="muted">คนหนึ่งเลือกคำตอบแบบลับ อีกคนต้องเดา<br>ก่อนเฉลย มาดูกันว่าใครรู้ใจใครมากกว่ากัน</p>
       </div>
       <div class="card form-card">
-        <label>ชื่อของคุณ</label>
-        <input id="name" maxlength="18" placeholder="เช่น ออม" autocomplete="nickname">
+        <label for="name">ชื่อของคุณ</label>
+        <input id="name" maxlength="18" placeholder="เช่น ออม" autocomplete="nickname" enterkeyhint="done">
         <button class="primary" id="createBtn"><span>＋</span> สร้างห้อง</button>
         <div class="or">หรือ</div>
-        <label>รหัสห้อง</label>
-        <input id="roomInput" maxlength="6" placeholder="เช่น 7K9X" autocapitalize="characters">
+        <label for="roomInput">รหัสห้อง</label>
+        <input id="roomInput" maxlength="6" placeholder="เช่น LD7K9X" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go">
         <button class="secondary" id="joinBtn">เข้าร่วมห้อง</button>
       </div>
     </section>
@@ -44,10 +44,23 @@
         <div class="player-slot" id="p2"><div class="avatar">2</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
       </div>
       <div class="card settings">
+        <div class="setting-heading">
+          <div><label>หมวดคำถาม</label><small>เลือกได้หลายหมวดตามสไตล์ของเรา</small></div>
+          <button type="button" class="text-action" id="allCategoriesBtn">เลือกทั้งหมด</button>
+        </div>
+        <div class="category-grid" id="categories" role="group" aria-label="เลือกหมวดคำถาม">
+          <button type="button" class="category-option selected" data-category="ความทรงจำ" aria-pressed="true"><span class="category-icon" aria-hidden="true">↶</span><span class="category-copy"><strong>ความทรงจำ</strong><small>10 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="category-option selected" data-category="ความชอบ" aria-pressed="true"><span class="category-icon" aria-hidden="true">✦</span><span class="category-copy"><strong>ความชอบ</strong><small>17 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="category-option selected" data-category="อนาคต" aria-pressed="true"><span class="category-icon" aria-hidden="true">↗</span><span class="category-copy"><strong>อนาคต</strong><small>11 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="category-option" data-category="ความสัมพันธ์" aria-pressed="false"><span class="category-icon" aria-hidden="true">∞</span><span class="category-copy"><strong>ความสัมพันธ์</strong><small>8 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="category-option" data-category="ชีวิตประจำวัน" aria-pressed="false"><span class="category-icon" aria-hidden="true">☀</span><span class="category-copy"><strong>ชีวิตประจำวัน</strong><small>9 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+          <button type="button" class="category-option" data-category="กวน ๆ" aria-pressed="false"><span class="category-icon" aria-hidden="true">☺</span><span class="category-copy"><strong>กวน ๆ</strong><small>8 คำถาม</small></span><span class="category-check" aria-hidden="true">✓</span></button>
+        </div>
+        <p id="questionCount" class="question-count" aria-live="polite"></p>
         <label>จำนวนคำถาม</label>
-        <div class="seg" id="rounds"><button data-value="10">10</button><button data-value="20" class="selected">20</button><button data-value="30">30</button><button data-value="40">40</button></div>
+        <div class="seg rounds" id="rounds" role="group" aria-label="จำนวนคำถาม"><button type="button" data-value="5">5</button><button type="button" data-value="10">10</button><button type="button" data-value="15">15</button><button type="button" data-value="20" class="selected">20</button><button type="button" data-value="30">30</button><button type="button" data-value="40">40</button></div>
         <label>คนเลือกคำตอบ</label>
-        <div class="seg mode" id="mode"><button data-value="alternate" class="selected">สลับกัน</button><button data-value="random">สุ่ม</button><button data-value="host">ฉัน</button><button data-value="guest">อีกคน</button></div>
+        <div class="seg mode" id="mode" role="group" aria-label="คนเลือกคำตอบ"><button type="button" data-value="alternate" class="selected">สลับกัน</button><button type="button" data-value="random">สุ่ม</button><button type="button" data-value="host">ฉัน</button><button type="button" data-value="guest">อีกคน</button></div>
       </div>
       <button class="primary" id="readyBtn">พร้อมเล่น</button>
       <p id="lobbyHint" class="hint">ส่งรหัสห้องให้อีกคน แล้วรอให้เข้ามา</p>
