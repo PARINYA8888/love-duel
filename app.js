@@ -1,3 +1,16 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js';
+import { getAuth, signInAnonymously } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js';
+import { forceLongPolling, getDatabase, onChildAdded, onDisconnect, onValue, get, push, ref, remove, serverTimestamp, set } from 'https://www.gstatic.com/firebasejs/13.0.0/firebase-database.js';
+
+const firebaseConfig={apiKey:'AIzaSyC2Dec248ieiO1PvAVqXZLQeXkmg7gjKY8',authDomain:'love-duel-55224.firebaseapp.com',databaseURL:'https://love-duel-55224-default-rtdb.asia-southeast1.firebasedatabase.app',projectId:'love-duel-55224',storageBucket:'love-duel-55224.firebasestorage.app',messagingSenderId:'592658217353',appId:'1:592658217353:web:fe3fbe12414573a5d54958'};
+forceLongPolling();
+const firebaseApp=initializeApp(firebaseConfig);
+const firebaseAuth=getAuth(firebaseApp);
+const firebaseDb=getDatabase(firebaseApp,firebaseConfig.databaseURL);
+let firebaseUser=null;
+const firebaseAuthReady=signInAnonymously(firebaseAuth).then(credential=>{firebaseUser=credential.user;return firebaseUser});
+firebaseAuthReady.catch(()=>{});
+
 const $=s=>document.querySelector(s);
 const screens={home:$('#home'),lobby:$('#lobby'),game:$('#game'),result:$('#result')};
 const questions=[
@@ -66,13 +79,14 @@ const questions=[
 ['อนาคต','ธรรมเนียมเล็ก ๆ ของคู่เราที่ฉันอยากให้มีต่อไปคืออะไร?',['เดตประจำเดือน','ส่งข้อความก่อนนอน','ฉลองเรื่องเล็ก ๆ','ถ่ายรูปเก็บทุกทริป']],
 ['อนาคต','ถ้าเราได้ทำโปรเจกต์สนุก ๆ ด้วยกัน ฉันเลือกอะไร?',['ทำอัลบั้มรูป','ปลูกต้นไม้','ทำคลิปเที่ยว','ลองขายของหรือทำงานฝีมือ']]
 ];
-let peer=null,conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=20,selectedMode='alternate',timerId=null;
-let selectedAnswerMode='turns',resumePending=false,reconnectTimer=null,resumeAttempts=0,sessionToken='',savedSession=null,installPrompt=null,joinAttempts=0,joinRetryTimer=null,connectionTimer=null;
+let conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=20,selectedMode='alternate',timerId=null;
+let selectedAnswerMode='turns',resumePending=false,sessionToken='',savedSession=null,installPrompt=null;
+let roomRef=null,partnerUid='',roomListeners=[],firebaseConnected=false,partnerConnected=false,joinSent=false,ownPresenceRef=null;
 let coupleTheme={name:'คู่ของเรา',emoji:'♥',palette:'rose'};
 const categoryNames=['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ'];
 const defaultCategories=['ความทรงจำ','ความชอบ','อนาคต'];
 const roundOptions=[5,10,15,20,30,40];
-const sessionKey='love-duel-session-v2';
+const sessionKey='love-duel-session-v3';
 const paletteMap={rose:['#ff5c7a','#ff8a65'],violet:['#a985ff','#ff7eaa'],ocean:['#55b8ff','#6ce0d5'],mint:['#51d6ad','#b7dd6a']};
 const emojiChoices=['♥','💕','🐻','🐰','🌙','☀️'];
 const defaultTheme={name:'คู่ของเรา',emoji:'♥',palette:'rose'};
@@ -83,8 +97,7 @@ function show(name){Object.values(screens).forEach(screen=>screen.classList.remo
 function protectPullToRefresh(){let startY=0;document.addEventListener('touchstart',event=>{startY=event.touches[0].clientY},{passive:true});document.addEventListener('touchmove',event=>{const y=event.touches[0].clientY;if(window.scrollY<=0&&y>startY)event.preventDefault()},{passive:false});document.addEventListener('touchend',()=>{startY=0},{passive:true});window.addEventListener('beforeunload',event=>{saveSession();if(state&&['choose','guess','simultaneous'].includes(state.phase)){event.preventDefault();event.returnValue=''}})}
 protectPullToRefresh();
 function toast(message){const element=$('#toast');element.textContent=message;element.classList.add('show');setTimeout(()=>element.classList.remove('show'),2400)}
-function code(){const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const bytes=new Uint8Array(4);crypto.getRandomValues(bytes);return'LD'+Array.from(bytes,byte=>alphabet[byte%alphabet.length]).join('')}
-const peerOptions={host:'0.peerjs.com',port:443,path:'/',secure:true,debug:2,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'}]}};
+function code(){const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';const bytes=new Uint8Array(6);crypto.getRandomValues(bytes);return'LD'+Array.from(bytes,byte=>alphabet[byte%alphabet.length]).join('')}
 function questionsInCategories(categories=selectedCategories){return questions.filter(question=>categories.includes(question[0]))}
 function shuffledQuestionOrder(categories=selectedCategories){const order=questions.map((question,index)=>categories.includes(question[0])?index:-1).filter(index=>index>=0);for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[order[i],order[j]]=[order[j],order[i]]}return order}
 function questionFor(index=state.index){const questionIndex=state.questionOrder?.[index];return questions[Number.isInteger(questionIndex)?questionIndex:index%questions.length]}
@@ -109,9 +122,8 @@ $('#mode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button|
 $('#createBtn').onclick=()=>setupHost();$('#joinBtn').onclick=()=>setupGuest();
 $('#copyRoom').onclick=async()=>{try{await navigator.clipboard.writeText(room);toast('คัดลอกรหัสห้องแล้ว')}catch(e){toast('คัดลอกไม่ได้ กรุณาจดรหัสห้องไว้')}};
 $('#readyBtn').onclick=()=>{if(!state||!conn?.open)return;if(isHost&&state.players.every(p=>p.name&&p.ready)){startGame();return}const role=myRole(),player=state.players.find(p=>p.id===role);if(!player||player.ready)return;player.ready=true;updateLobby();send('READY',{role});if(isHost)send('LOBBY',{state})};
-$('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){send('GUESS',{n:state.guess});if(isHost)reveal();}};$('#nextBtn').onclick=next;
+$('#nextBtn').onclick=next;
 $('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเล่นอีกครั้งแล้ว')}else toast('การเชื่อมต่อขาดหาย กรุณาโหลดหน้าแล้วเข้าห้องใหม่')};
-$('#homeBtn').onclick=()=>location.reload();
 updateLobby();
 
 // Keep a resumable session on this device, including the private room token.
@@ -126,9 +138,11 @@ function saveSession(){if(!room||!state)return;const record={room,isHost,name:me
 function clearSavedSession(){safeRemove(sessionKey);savedSession=null;displayResume()}
 function applyTheme(theme=coupleTheme){coupleTheme=normalizeTheme(theme);const colors=paletteMap[coupleTheme.palette];document.documentElement.style.setProperty('--accent',colors[0]);document.documentElement.style.setProperty('--accent2',colors[1]);document.querySelector('meta[name="theme-color"]').content=colors[0];$('.brand-mark').textContent=coupleTheme.emoji;$('.brand small').textContent=coupleTheme.name;$('#themePreview').textContent=coupleTheme.emoji;$('#resultTitle').textContent=coupleTheme.emoji+' '+coupleTheme.name;$('#coupleName').value=coupleTheme.name;document.querySelectorAll('[data-emoji]').forEach(b=>b.classList.toggle('selected',b.dataset.emoji===coupleTheme.emoji));document.querySelectorAll('[data-theme]').forEach(b=>b.classList.toggle('selected',b.dataset.theme===coupleTheme.palette))}
 function updateThemeControls(){const locked=!!state&&(!isHost||state.phase!=='lobby');$('#coupleName').disabled=locked;document.querySelectorAll('#themeOptions button').forEach(b=>b.disabled=locked);applyTheme(state?.coupleTheme||coupleTheme)}
-function send(type,payload={}){saveSession();if(conn&&conn.open)conn.send({type,...payload})}
-function destroyPeer(){if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}if(joinRetryTimer){clearTimeout(joinRetryTimer);joinRetryTimer=null}if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}const old=conn;conn=null;try{if(old)old.close()}catch(e){}try{if(peer&&!peer.destroyed)peer.destroy()}catch(e){}peer=null}
-function setConn(ok){$('#connection').textContent=ok?(conn?.open?'เชื่อมต่อแล้ว':'เซิร์ฟเวอร์พร้อม'):resumePending?'กำลังกลับเข้าห้อง…':'ยังไม่เชื่อมต่อ';$('#connection').className='connection '+(ok?'online':'offline')}
+function send(type,payload={}){saveSession();if(!firebaseUser||!room||!partnerUid)return;const envelope={type,...payload};if(envelope.state)envelope.state=guestSnapshot(envelope.state);void sendRoomMessage(envelope)}
+function updateConnection(){const wasOpen=!!conn?.open;const open=!!(firebaseConnected&&partnerConnected&&partnerUid);if(!conn)conn={open:false};conn.open=open;$('#connection').textContent=open?'เชื่อมต่อแล้ว':resumePending?'กำลังกลับเข้าห้อง…':'กำลังเชื่อมต่อ…';$('#connection').className='connection '+(open?'online':'offline');if(open&&!wasOpen){if(!isHost)toast('เชื่อมต่อห้องแล้ว');else if(state?.players?.[1]?.name)toast('แฟนเชื่อมต่อแล้ว');updateLobby();if(isHost&&state?.players?.[1]?.name)send('SYNC',{state:guestSnapshot()});resendPendingActions()}}
+function listen(refValue,callback,error){const unsubscribe=onValue(refValue,callback,error||(()=>toast('เชื่อมต่อฐานข้อมูลไม่สำเร็จ · กำลังลองใหม่')));roomListeners.push(unsubscribe);return unsubscribe}
+function clearRoomListeners(){roomListeners.splice(0).forEach(unsubscribe=>{try{unsubscribe()}catch(e){}})}
+function disconnectFirebaseRoom(){clearInterval(timerId);clearRoomListeners();if(ownPresenceRef)remove(ownPresenceRef).catch(()=>{});ownPresenceRef=null;conn=null;roomRef=null;partnerUid='';firebaseConnected=false;partnerConnected=false;joinSent=false}
 function updateLobby(){
 const ps=state?.players||[];
 if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||20;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme)}
@@ -138,16 +152,16 @@ $('#lobbyHint').textContent=isHost?(!ps[1]?.name?'ส่งรหัสห้อ
 const mePlayer=ps.find(p=>p?.id===myRole());$('#readyBtn').textContent=isHost&&!conn?.open?'รอผู้เล่น':isHost&&bothReady?'เริ่มเกม':'พร้อมเล่น';$('#readyBtn').disabled=isHost?(!conn||!conn.open||!!mePlayer?.ready&&!bothReady):(!conn||!conn.open||!!mePlayer?.ready);
 updateSettingControls();updateThemeControls();saveSession()
 }
-function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,coupleTheme:normalizeTheme(coupleTheme),index:0,questionOrder,chooser:null,chooserByRound:{},actual:null,guess:null,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
+function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,coupleTheme:normalizeTheme(coupleTheme),index:0,questionOrder,chooser:null,chooserByRound:{},actual:null,guess:null,guessSubmitted:false,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
 function publishLobbySettings(shuffleQuestions=false){if(!isHost||!state||state.phase!=='lobby')return;state.categories=[...selectedCategories];state.rounds=selectedRounds;state.mode=selectedMode;state.answerMode=selectedAnswerMode;state.coupleTheme=normalizeTheme(coupleTheme);if(shuffleQuestions){state.questionOrder=shuffledQuestionOrder(selectedCategories);state.chooserByRound={}}updateLobby();send('LOBBY',{state})}
 function updateSettingControls(){const available=questionsInCategories().length,validRounds=roundOptions.filter(n=>n<=available);if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(n=>n<selectedRounds).pop()||validRounds[0]||5;$('#questionCount').textContent=state&&!isHost?'เจ้าของห้องเลือกหมวดคำถามให้ทั้งคู่':'มี '+available+' คำถาม จาก '+selectedCategories.length+' หมวดที่เลือก';document.querySelectorAll('#categories [data-category]').forEach(b=>{const selected=selectedCategories.includes(b.dataset.category);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.disabled=!!state&&(!isHost||state.phase!=='lobby')});document.querySelectorAll('#rounds button').forEach(b=>{const round=Number(b.dataset.value);b.classList.toggle('selected',round===selectedRounds);b.disabled=round>available||(!!state&&(!isHost||state.phase!=='lobby'))});document.querySelectorAll('#mode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedMode);b.disabled=selectedAnswerMode==='simultaneous'||!!state&&(!isHost||state.phase!=='lobby')});document.querySelectorAll('#answerMode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedAnswerMode);b.disabled=!!state&&(!isHost||state.phase!=='lobby')});$('#chooserSettings').classList.toggle('hidden',selectedAnswerMode==='simultaneous');$('#allCategoriesBtn').disabled=!!state&&(!isHost||state.phase!=='lobby')}
-function startGuessTimer(){clearInterval(timerId);if(state.phase!=='guess'||Number.isInteger(state.guess))return;$('#talk').classList.remove('hidden');$('#timer').textContent=60;timerId=setInterval(()=>{const n=Number($('#timer').textContent)-1;$('#timer').textContent=n;if(n<=0){clearInterval(timerId);if(!Number.isInteger(state.guess)){state.guess=null;lockChoices();$('#roleBanner').textContent='หมดเวลา · กำลังเฉลยคำตอบ';toast('หมดเวลา ระบบกำลังเฉลยคำตอบ');if(isHost)reveal();else send('GUESS',{n:null})}}},1000)}
+function startGuessTimer(){clearInterval(timerId);if(state.phase!=='guess'||state.guessSubmitted)return;$('#talk').classList.remove('hidden');$('#timer').textContent=60;timerId=setInterval(()=>{const n=Number($('#timer').textContent)-1;$('#timer').textContent=n;if(n<=0){clearInterval(timerId);if(!state.guessSubmitted){state.guess=null;state.guessSubmitted=true;lockChoices();$('#roleBanner').textContent='หมดเวลา · กำลังเฉลยคำตอบ';toast('หมดเวลา ระบบกำลังเฉลยคำตอบ');send('GUESS',{index:state.index,n:null})}}},1000)}
 function blankAnswers(){return{host:{self:null,guess:null},guest:{self:null,guess:null}}}
 function blankSubmitted(){return{host:{self:false,guess:false},guest:{self:false,guess:false}}}
 function renderQuestion(resume=false){
 clearInterval(timerId);const item=questionFor();$('#qNo').textContent=(state.index+1)+' / '+state.rounds;$('#category').textContent=item[0];$('#question').textContent=item[1];$('#choices').innerHTML=item[2].map((t,i)=>'<button class="choice" data-n="'+(i+1)+'"><span class="num">'+(i+1)+'</span><span class="txt">'+t+'</span></button>').join('');
 $('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#simProgress').classList.add('hidden');
-if(!resume){state.actual=null;state.guess=null;state.answers=blankAnswers();state.simSubmitted=blankSubmitted();state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';state.chooser=state.answerMode==='simultaneous'?null:chooserFor(state.index)}
+if(!resume){state.actual=null;state.guess=null;state.guessSubmitted=false;state.answers=blankAnswers();state.simSubmitted=blankSubmitted();state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';state.chooser=state.answerMode==='simultaneous'?null:chooserFor(state.index)}
 else if(state.answerMode!=='simultaneous'&&!state.chooser)state.chooser=chooserFor(state.index);
 document.querySelectorAll('.choice').forEach(button=>button.onclick=()=>pick(+button.dataset.n));
 if(state.answerMode==='simultaneous')renderSimultaneous();else configureClassicPhase();updateScores();saveSession()
@@ -156,7 +170,7 @@ function configureClassicPhase(){
 if(state.phase==='reveal'){const entry=state.history?.[state.index];if(entry)renderReveal(entry);return}
 $('#simProgress').classList.add('hidden');$('#talk').classList.toggle('hidden',state.phase!=='guess');$('#reveal').classList.add('hidden');const chooserHere=state.chooser===myRole();
 if(state.phase==='choose'){$('#roleBanner').textContent=chooserHere?'คุณเลือกคำตอบแบบลับ · เลือกได้เลย':'อีกคนกำลังเลือกคำตอบแบบลับ · รอสักครู่';document.querySelectorAll('.choice').forEach(button=>{button.disabled=!chooserHere;button.classList.toggle('locked',!chooserHere)});return}
-if(state.phase==='guess'){$('#roleBanner').textContent=chooserHere?'อีกคนกำลังทายคำตอบของคุณ':'เลือกคำตอบที่คิดว่าอีกคนเลือก';$('#talkPrompt').textContent=Number.isInteger(state.guess)?'เลือกแล้ว · กด “เฉลยเลย” เมื่อพร้อม':'เลือกคำตอบที่คิดว่าอีกคนเลือก ภายใน 60 วินาที';document.querySelectorAll('.choice').forEach(button=>{button.disabled=chooserHere||Number.isInteger(state.guess);button.classList.toggle('locked',chooserHere||Number.isInteger(state.guess))});$('#revealNowBtn').classList.add('hidden')}
+if(state.phase==='guess'){const submitted=!!state.guessSubmitted;$('#roleBanner').textContent=chooserHere?'อีกคนกำลังทายคำตอบของคุณ':submitted?'ส่งคำตอบแล้ว · รอเฉลย':'เลือกคำตอบที่คิดว่าอีกคนเลือก';$('#talkPrompt').textContent=submitted?'ส่งแล้ว · กำลังรอเฉลย':'เลือกคำตอบที่คิดว่าอีกคนเลือก ภายใน 60 วินาที';document.querySelectorAll('.choice').forEach(button=>{button.disabled=chooserHere||submitted;button.classList.toggle('locked',chooserHere||submitted)});$('#revealNowBtn').classList.add('hidden')}
 }
 function simCount(role){const submitted=state.simSubmitted?.[role]||{};return Number(!!submitted.self)+Number(!!submitted.guess)}
 function updateSimProgress(){const hostName=state.players?.[0]?.name||'คนที่ 1',guestName=state.players?.[1]?.name||'คนที่ 2';$('#simProgress').textContent=hostName+' '+simCount('host')+'/2 · '+guestName+' '+simCount('guest')+'/2'}
@@ -166,8 +180,8 @@ state.answers=state.answers||blankAnswers();state.simSubmitted=state.simSubmitte
 $('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#simProgress').classList.remove('hidden');updateSimProgress();$('#roleBanner').textContent=step==='self'?'ข้อ 1/2 · เลือกคำตอบของคุณแบบลับ':step==='guess'?'ข้อ 2/2 · เดาคำตอบที่แฟนจะเลือกแบบลับ': 'ส่งครบ 2/2 แล้ว · รอแฟนตอบให้ครบ';
 document.querySelectorAll('.choice').forEach(button=>{button.disabled=state.phase!=='simultaneous'||!step;button.classList.toggle('locked',!step)});saveSession()
 }
-function pick(n){if(!Number.isInteger(n)||n<1||n>4||!state)return;if(state.answerMode==='simultaneous'){pickSimultaneous(n);return}if(state.phase==='choose'&&state.chooser===myRole()){state.actual=n;state.phase='guess';configureClassicPhase();send('ACTUAL',{n,role:myRole()});toast('เลือกคำตอบแล้ว ส่งให้อีกคนทายแบบลับแล้ว')}else if(state.phase==='guess'&&state.chooser!==myRole()){state.guess=n;lockChoices();clearInterval(timerId);$('#revealNowBtn').classList.add('hidden');$('#roleBanner').textContent='ส่งคำตอบแล้ว · กำลังเฉลย…';$('#talkPrompt').textContent='ส่งคำตอบแล้ว ระบบกำลังเปิดผล';saveSession();if(isHost)reveal();else send('GUESS',{n})}}
-function pickSimultaneous(n){if(state.phase!=='simultaneous')return;state.answers=state.answers||blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();const role=myRole(),mine=state.answers[role],field=!Number.isInteger(mine.self)?'self':!Number.isInteger(mine.guess)?'guess':null;if(!field)return;mine[field]=n;state.simSubmitted[role][field]=true;saveSession();renderSimultaneous();if(isHost){publishSimProgress();if(state.phase==='simultaneous')toast(field==='self'?'บันทึกข้อ 1/2 แล้ว · เลือกอีกครั้งเพื่อเดาแฟน':'ส่งครบแล้ว · รอแฟนตอบ')}else{send('SIM_ANSWER',{index:state.index,field,n});toast(field==='self'?'บันทึกข้อ 1/2 แล้ว · แตะอีกครั้งเพื่อเดาแฟน':'ส่งครบแล้ว · รอแฟนตอบ')}}
+function pick(n){if(!Number.isInteger(n)||n<1||n>4||!state)return;if(state.answerMode==='simultaneous'){pickSimultaneous(n);return}if(state.phase==='choose'&&state.chooser===myRole()){state.actual=n;state.phase='guess';configureClassicPhase();send('ACTUAL_READY',{index:state.index,role:myRole()});toast('เลือกคำตอบแล้ว · อีกคนกำลังทายแบบลับ')}else if(state.phase==='guess'&&state.chooser!==myRole()){state.guess=n;state.guessSubmitted=true;lockChoices();clearInterval(timerId);$('#revealNowBtn').classList.add('hidden');$('#roleBanner').textContent='ส่งคำตอบแล้ว · รอเฉลย…';$('#talkPrompt').textContent='ส่งคำตอบแล้ว · กำลังรอเฉลย';send('GUESS',{index:state.index,n});saveSession()}}
+function pickSimultaneous(n){if(state.phase!=='simultaneous')return;state.answers=state.answers||blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();const role=myRole(),mine=state.answers[role],field=!Number.isInteger(mine.self)?'self':!Number.isInteger(mine.guess)?'guess':null;if(!field)return;mine[field]=n;state.simSubmitted[role][field]=true;saveSession();renderSimultaneous();if(isHost)publishSimProgress();else if(field==='self')send('SIM_SUBMITTED',{index:state.index,field});else send('SIM_ANSWER',{index:state.index,answers:{...mine}});toast(field==='self'?'บันทึกข้อ 1/2 แล้ว · แตะอีกครั้งเพื่อเดาแฟน':'ส่งครบแล้ว · รอแฟนตอบ')}
 function simAnswersComplete(){return['host','guest'].every(role=>['self','guess'].every(field=>Number.isInteger(state.answers?.[role]?.[field])))}
 function publishSimProgress(){if(!isHost||state.phase!=='simultaneous')return;if(simAnswersComplete()){revealSimultaneous();return}send('SIM_PROGRESS',{index:state.index,submitted:state.simSubmitted})}
 function revealSimultaneous(){if(!isHost||state.phase!=='simultaneous'||!simAnswersComplete())return;const answers=JSON.parse(JSON.stringify(state.answers)),correct={host:answers.host.guess===answers.guest.self,guest:answers.guest.guess===answers.host.self};state.score.host+=Number(correct.host);state.score.guest+=Number(correct.guest);const entry={question:questionFor()[1],answerMode:'simultaneous',answers,correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('SIM_REVEAL',{index:state.index,answers,correct,score:state.score});saveSession()}
@@ -179,52 +193,137 @@ if(entry.answerMode==='simultaneous'){$('#classicReveal').classList.add('hidden'
 else{$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#actual').textContent=choiceText(entry.actual);$('#guess').textContent=choiceText(entry.guess);$('#resultText').textContent=entry.ok?'ทายถูก รู้ใจกันจริง ๆ':Number.isInteger(entry.guess)?'พลาดข้อนี้ แต่ได้รู้จักกันมากขึ้น':'หมดเวลา รอบนี้ไม่มีคะแนน';$('#resultText').className='result-text '+(entry.ok?'ok':'miss')}
 updateScores();saveSession()
 }
-function reveal(){clearInterval(timerId);if(!isHost||state.phase==='reveal'||!Number.isInteger(state.actual))return;const ok=state.actual===state.guess,guesser=state.chooser==='host'?'guest':'host';if(ok)state.score[guesser]++;const entry={question:questionFor()[1],answerMode:'turns',actual:state.actual,guess:state.guess,ok,chooser:state.chooser};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:state.actual,guess:state.guess,ok,score:state.score});saveSession()}
+function reveal(){clearInterval(timerId);if(!state||state.chooser!==myRole()||state.phase==='reveal'||!Number.isInteger(state.actual))return;const ok=state.actual===state.guess,guesser=state.chooser==='host'?'guest':'host';if(ok)state.score[guesser]++;const entry={question:questionFor()[1],answerMode:'turns',actual:state.actual,guess:state.guess,ok,chooser:state.chooser};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:state.actual,guess:state.guess,ok,score:state.score});saveSession()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
 function historyMarkup(h,i){if(h.answerMode==='simultaneous'){const count=Number(!!h.correct?.host)+Number(!!h.correct?.guest);return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">'+escapeHtml(state.players[0].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.host.self))+' · '+escapeHtml(state.players[1].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.guest.guess))+'</small><small class="answer-detail">'+escapeHtml(state.players[1].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.guest.self))+' · '+escapeHtml(state.players[0].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.host.guess))+'</small></span><span class="badge '+(count?'ok':'miss')+'">'+count+'/2</span></div>'}return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">คำตอบจริง: '+escapeHtml(choiceTextAt(h.question,h.actual))+' · ทาย: '+escapeHtml(choiceTextAt(h.question,h.guess))+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+(h.ok?'ตรงกัน':'ไม่ตรง')+'</span></div>'}
 function finish(){clearInterval(timerId);show('result');applyTheme(state.coupleTheme);const mine=state.score[myRole()],theirs=state.score[myRole()==='host'?'guest':'host'],max=state.rounds*(state.answerMode==='simultaneous'?2:1);const correct=state.history.reduce((total,h)=>total+(h.answerMode==='simultaneous'?Number(!!h.correct?.host)+Number(!!h.correct?.guest):Number(!!h.ok)),0);const pct=Math.round(correct/Math.max(max,1)*100);$('#percent').textContent=pct+'%';$('#resultSummary').textContent=pct>=80?'รู้ใจกันสุด ๆ':pct>=50?'เริ่มรู้ใจกันมากขึ้นแล้ว':'คะแนนไม่สำคัญเท่ากับได้คุยกัน';$('#finalMe').textContent=mine;$('#finalOther').textContent=theirs;$('#historyList').innerHTML=state.history.map(historyMarkup).join('');saveSession()}
 function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;state.index=0;state.score={host:0,guest:0};state.history=[];state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion();send('START',{state})}
 function next(){if(state.phase!=='reveal')return;if(!isHost){send('NEXT_REQUEST');return}if(state.index+1>=state.rounds){state.phase='finished';send('FINISH',{state});finish();return}state.index++;state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';renderQuestion();send('NEXT',{state})}
 function startRematch(){if(!isHost||!state.players[1].name||!conn?.open)return toast('อีกคนหลุดจากห้อง จึงเริ่มเกมซ้ำไม่ได้');const token=state.players[1].token;state=makeState();state.players[1].token=token;other=state.players[1].name;show('lobby');updateLobby();send('LOBBY',{state})}
-function restoreSavedView(){if(!state)return;if(state.coupleTheme)applyTheme(state.coupleTheme);if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
-function setupHost(resume=false){
-if(!window.Peer)return toast('โหลดระบบออนไลน์ไม่สำเร็จ โปรดรีโหลดหน้าแล้วลองอีกครั้ง');resumePending=resume;resumeAttempts=0;
-if(resume){if(!savedSession)return toast('ไม่พบห้องที่บันทึกไว้');room=savedSession.room;me=savedSession.name;other=savedSession.other;sessionToken=savedSession.token||newToken();state=savedSession.state;coupleTheme=normalizeTheme(state.coupleTheme);if(state.players?.[1]?.name&&!state.players[1].token)state.players[1].token=sessionToken}
-else{clearSavedSession();room=code();me=$('#name').value.trim()||'ผู้เล่น 1';other='';sessionToken=newToken();state=null;coupleTheme=normalizeTheme({name:$('#coupleName').value||defaultTheme.name,emoji:coupleTheme.emoji,palette:coupleTheme.palette})}
-isHost=true;destroyPeer();setConn(false);createHostPeer(resume)
+function restoreSavedView(){if(!state)return;if(state.coupleTheme)applyTheme(state.coupleTheme);if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!state.guessSubmitted)startGuessTimer()}
+function beginPresence(){
+  ownPresenceRef=ref(firebaseDb,`rooms/${room}/presence/${firebaseUser.uid}`);
+  const infoRef=ref(firebaseDb,'.info/connected');
+  const unsubscribe=onValue(infoRef,snapshot=>{
+    firebaseConnected=snapshot.val()===true;
+    if(firebaseConnected&&ownPresenceRef){onDisconnect(ownPresenceRef).remove().then(()=>set(ownPresenceRef,{online:true,updatedAt:serverTimestamp()})).catch(()=>{});}
+    else if(!firebaseConnected){partnerConnected=false;clearInterval(timerId);}
+    updateConnection();
+  },()=>{firebaseConnected=false;updateConnection()});
+  roomListeners.push(unsubscribe);
 }
-function createHostPeer(resume){if(!window.Peer)return;destroyPeer();peer=new Peer(room,peerOptions);peer.on('open',()=>{setConn(true);if(!resume)state=makeState();updateLobby();if(resume){restoreSavedView();toast('กลับเข้าห้องเดิมแล้ว · รออีกคนเชื่อมต่อ')}else{show('lobby');toast('สร้างห้องแล้ว ส่งรหัสให้แฟนได้เลย')}saveSession()});peer.on('connection',candidate=>{if(conn?.open){candidate.close();return}if(conn)try{conn.close()}catch(e){}conn=candidate;wire(candidate)});peer.on('disconnected',()=>{setConn(false);toast('สัญญาณเซิร์ฟเวอร์หลุด กำลังเชื่อมใหม่…');try{peer.reconnect()}catch(e){}});peer.on('error',e=>{setConn(false);if(e.type==='unavailable-id'&&resume&&resumeAttempts<6){resumeAttempts++;destroyPeer();setTimeout(()=>createHostPeer(true),1200);return}if(e.type==='unavailable-id'&&!resume){room=code();destroyPeer();toast('กำลังสร้างรหัสห้องใหม่…');setTimeout(()=>createHostPeer(false),500);return}toast('ระบบเชื่อมต่อขัดข้อง: '+e.type)})}
-function setupGuest(resume=false){
-if(resume){if(!savedSession)return toast('ไม่พบห้องที่บันทึกไว้');room=savedSession.room;me=savedSession.name;other=savedSession.other;sessionToken=savedSession.token||newToken();state=savedSession.state;coupleTheme=normalizeTheme(state.coupleTheme)}
-else{room=$('#roomInput').value.trim().toUpperCase();me=$('#name').value.trim()||'ผู้เล่น 2';if(!room)return toast('กรอกรหัสห้องก่อน');if(!/^LD[A-Z0-9]{4}$/.test(room))return toast('รหัสห้องต้องเป็นรูปแบบ LDxxxx');clearSavedSession();sessionToken=newToken();state=null;other=''}
-if(!window.Peer)return toast('โหลดระบบออนไลน์ไม่สำเร็จ โปรดรีโหลดหน้าแล้วลองอีกครั้ง');isHost=false;resumePending=resume;if(!resume)joinAttempts=0;destroyPeer();setConn(false);peer=new Peer(peerOptions);peer.on('open',()=>{if(resume){restoreSavedView();toast('กำลังกลับเข้าห้องเดิม…');connectGuest(0,true)}else{show('lobby');updateLobby();connectGuest()}});peer.on('disconnected',()=>{setConn(false);toast('สัญญาณเซิร์ฟเวอร์หลุด กำลังเชื่อมใหม่…');try{peer.reconnect()}catch(e){}if(state)scheduleGuestReconnect()});peer.on('error',e=>{setConn(false);if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}if(e.type==='peer-unavailable'&&resumePending){scheduleGuestReconnect();return}if(e.type==='peer-unavailable'&&!resumePending&&retryInitialJoin())return;toast(e.type==='peer-unavailable'?'ไม่พบผู้เล่น: ให้เจ้าของห้องเปิดหน้าห้องค้างไว้และตรวจรหัส':'เชื่อมต่อไม่สำเร็จ: '+e.type)})
+function watchInbox(){
+  const inboxRef=ref(firebaseDb,`rooms/${room}/inbox/${firebaseUser.uid}`);
+  const unsubscribe=onChildAdded(inboxRef,snapshot=>{
+    const envelope=snapshot.val();
+    if(envelope?.fromUid===partnerUid&&envelope.message)handle(envelope.message);
+    remove(snapshot.ref).catch(()=>{});
+  },()=>toast('รับข้อความจากอีกคนไม่สำเร็จ · กำลังเชื่อมใหม่'));
+  roomListeners.push(unsubscribe);
 }
-function retryInitialJoin(){if(isHost||resumePending)return false;if(joinRetryTimer)return true;if(joinAttempts>=3)return false;const delays=[1200,2400,4000];joinAttempts++;toast('กำลังค้นหาห้องอีกครั้ง ('+joinAttempts+'/3)…');joinRetryTimer=setTimeout(()=>{joinRetryTimer=null;if(!isHost&&peer&&!peer.destroyed&&!conn?.open)connectGuest(0,false)},delays[joinAttempts-1]);return true}
-function scheduleGuestReconnect(){if(isHost||!peer||peer.destroyed||reconnectTimer)return;resumePending=true;reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectGuest(0,true)},1800);setConn(false)}
-function connectGuest(attempt=0,persistent=resumePending){if(!peer||peer.destroyed||conn?.open)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}if(conn)try{conn.close()}catch(e){}conn=peer.connect(room,{reliable:true,serialization:'json'});const current=conn;wire(current);connectionTimer=setTimeout(()=>{connectionTimer=null;if(conn!==current||current.open)return;try{current.close()}catch(e){}if(persistent||attempt<2){if(persistent)scheduleGuestReconnect();else setTimeout(()=>connectGuest(attempt+1,false),1200)}else toast('เชื่อมต่อไม่สำเร็จ ลองตรวจรหัสห้องหรือสัญญาณอินเทอร์เน็ต')},15000)}
-function wire(channel=conn){if(!channel)return;channel.on('open',()=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}if(joinRetryTimer){clearTimeout(joinRetryTimer);joinRetryTimer=null}joinAttempts=0;setConn(true);toast(isHost?'แฟนเชื่อมต่อแล้ว':'เข้าห้องสำเร็จ');if(!isHost)send('JOIN',{name:me,token:sessionToken})});channel.on('close',()=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}conn=null;setConn(false);clearInterval(timerId);if(isHost)toast('อีกคนหลุดชั่วคราว · รอให้กลับมาเชื่อมต่อ');else if(state){toast('หลุดชั่วคราว · กำลังกลับเข้าห้อง');scheduleGuestReconnect()}else toast('การเชื่อมต่อถูกตัด')});channel.on('error',e=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}setConn(false);if(!isHost&&!state&&!resumePending&&retryInitialJoin())return;if(!isHost&&state)scheduleGuestReconnect();else toast('เชื่อมต่อไม่สำเร็จ: '+(e?.type||'ลองใหม่'))});channel.on('data',handle)}
-function guestSnapshot(){const copy=JSON.parse(JSON.stringify(state));if(copy.answerMode==='simultaneous'&&copy.phase!=='reveal'&&copy.phase!=='finished')copy.answers=blankAnswers();return copy}
+function watchPartner(uid){
+  if(!uid||uid===firebaseUser.uid)return;
+  if(partnerUid===uid)return;
+  partnerUid=uid;partnerConnected=false;watchInbox();
+  const presenceRef=ref(firebaseDb,`rooms/${room}/presence/${uid}`);
+  listen(presenceRef,snapshot=>{partnerConnected=snapshot.exists()&&snapshot.val()?.online===true;updateConnection();if(!partnerConnected)clearInterval(timerId)});
+  updateConnection();
+}
+async function sendRoomMessage(message){
+  if(!partnerUid||!firebaseUser)return;
+  try{await push(ref(firebaseDb,`rooms/${room}/inbox/${partnerUid}`),{fromUid:firebaseUser.uid,message,sentAt:serverTimestamp()})}
+  catch(error){console.error('Firebase message failed',error);toast('ส่งข้อมูลไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง')}
+}
+function resendPendingActions(){
+  if(!state||!partnerUid)return;
+  if(state.phase==='guess'&&state.chooser!==myRole()&&state.guessSubmitted)send('GUESS',{index:state.index,n:state.guess});
+  if(!isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'){
+    const mine=state.answers?.guest||{};
+    for(const field of ['self','guess'])if(Number.isInteger(mine[field]))send('SIM_SUBMITTED',{index:state.index,field});
+    if(Number.isInteger(mine.self)&&Number.isInteger(mine.guess))send('SIM_ANSWER',{index:state.index,answers:{...mine}});
+  }
+}
+async function acceptJoin(uid,request){
+  if(!isHost||!uid||!request||uid===firebaseUser.uid)return;
+  try{
+    const guestUidRef=ref(firebaseDb,`rooms/${room}/guestUid`);
+    const current=(await get(guestUidRef)).val();
+    if(current&&current!==uid)return;
+    if(!current)await set(guestUidRef,uid);
+    watchPartner(uid);
+    handle({type:'JOIN',name:request.name,token:request.token});
+  }catch(error){console.error('Firebase join failed',error);toast('รับผู้เล่นไม่สำเร็จ · ลองใหม่อีกครั้ง')}
+}
+async function setupHost(resume=false){
+  if(resume&&!savedSession)return toast('ไม่พบห้องที่บันทึกไว้');
+  disconnectFirebaseRoom();resumePending=resume;show('lobby');conn={open:false};updateConnection();
+  try{await firebaseAuthReady;}catch(error){console.error('Firebase authentication failed',error);return toast('เข้าใช้ระบบออนไลน์ไม่ได้ · ลองรีโหลดหน้าอีกครั้ง')}
+  if(resume){room=savedSession.room;me=savedSession.name;other=savedSession.other;sessionToken=savedSession.token||newToken();state=savedSession.state;coupleTheme=normalizeTheme(state.coupleTheme);if(state.players?.[1]?.name&&!state.players[1].token)state.players[1].token=sessionToken}
+  else{clearSavedSession();room=code();me=$('#name').value.trim()||'ผู้เล่น 1';other='';sessionToken=newToken();coupleTheme=normalizeTheme({name:$('#coupleName').value||defaultTheme.name,emoji:coupleTheme.emoji,palette:coupleTheme.palette});isHost=true;state=makeState()}
+  isHost=true;roomRef=ref(firebaseDb,`rooms/${room}`);conn={open:false};
+  try{
+    const hostUidRef=ref(firebaseDb,`rooms/${room}/hostUid`);
+    if(resume){if((await get(hostUidRef)).val()!==firebaseUser.uid)throw new Error('resume-owner-mismatch')}
+    else{
+      let created=false;
+      for(let attempt=0;attempt<5&&!created;attempt++){
+        try{await set(roomRef,{hostUid:firebaseUser.uid,createdAt:serverTimestamp()});created=true}
+        catch(error){if(error?.code==='PERMISSION_DENIED'&&attempt<4){room=code();roomRef=ref(firebaseDb,`rooms/${room}`)}else throw error}
+      }
+      if(!created)throw new Error('room-create-failed');
+    }
+    beginPresence();
+    const joinsRef=ref(firebaseDb,`rooms/${room}/joinRequests`);
+    const stopJoins=onChildAdded(joinsRef,snapshot=>void acceptJoin(snapshot.key,snapshot.val()),error=>{console.error(error);toast('อ่านคำขอเข้าห้องไม่สำเร็จ')});roomListeners.push(stopJoins);
+    const existingGuest=(await get(ref(firebaseDb,`rooms/${room}/guestUid`))).val();
+    if(existingGuest){watchPartner(existingGuest);if(state.players?.[1]?.name)send('SYNC',{state:guestSnapshot()})}
+    updateLobby();
+    if(resume){restoreSavedView();toast('กลับเข้าห้องเดิมแล้ว · กำลังรออีกคนเชื่อมต่อ')}
+    else toast('สร้างห้องแล้ว · ส่งรหัสให้แฟนได้เลย');
+    saveSession();
+  }catch(error){console.error('Firebase room setup failed',error);disconnectFirebaseRoom();show('home');toast(error?.message==='resume-owner-mismatch'?'ห้องนี้ไม่ได้อยู่ในบัญชีอุปกรณ์นี้ · สร้างห้องใหม่ได้เลย':'สร้างห้องไม่สำเร็จ · ตรวจการตั้งค่า Firebase แล้วลองอีกครั้ง')}
+}
+async function setupGuest(resume=false){
+  if(resume&&!savedSession)return toast('ไม่พบห้องที่บันทึกไว้');
+  disconnectFirebaseRoom();resumePending=resume;
+  if(resume){room=savedSession.room;me=savedSession.name;other=savedSession.other;sessionToken=savedSession.token||newToken();state=savedSession.state;coupleTheme=normalizeTheme(state.coupleTheme)}
+  else{room=$('#roomInput').value.trim().toUpperCase();me=$('#name').value.trim()||'ผู้เล่น 2';if(!room)return toast('กรอกรหัสห้องก่อน');if(!/^LD[A-HJ-NP-Z2-9]{6}$/.test(room))return toast('รหัสห้องต้องมี 8 ตัวและขึ้นต้นด้วย LD');clearSavedSession();sessionToken=newToken();state=null;other=''}
+  isHost=false;conn={open:false};roomRef=ref(firebaseDb,`rooms/${room}`);show('lobby');updateLobby();
+  try{await firebaseAuthReady;
+    const requestRef=ref(firebaseDb,`rooms/${room}/joinRequests/${firebaseUser.uid}`);
+    await set(requestRef,{name:me.slice(0,18),token:sessionToken,requestedAt:serverTimestamp()});
+    const guestUidRef=ref(firebaseDb,`rooms/${room}/guestUid`);
+    listen(guestUidRef,async snapshot=>{
+      if(snapshot.val()!==firebaseUser.uid||joinSent)return;
+      joinSent=true;
+      try{const hostUid=(await get(ref(firebaseDb,`rooms/${room}/hostUid`))).val();if(!hostUid)throw new Error('room-not-found');beginPresence();watchPartner(hostUid);if(resume)restoreSavedView();toast(resume?'กำลังกลับเข้าห้องเดิม…':'ส่งคำขอแล้ว · กำลังเข้าห้อง')}
+      catch(error){console.error(error);toast('เข้าห้องไม่สำเร็จ · ลองตรวจรหัสอีกครั้ง')}
+    },error=>{console.error(error);toast('ไม่พบห้องหรือห้องเต็มแล้ว · ตรวจรหัสแล้วลองใหม่')});
+  }catch(error){console.error('Firebase join request failed',error);disconnectFirebaseRoom();show('home');toast(error?.code==='PERMISSION_DENIED'?'ไม่พบห้องหรือห้องเต็มแล้ว · ตรวจรหัสแล้วลองใหม่':'เชื่อมต่อไม่ได้ · ตรวจอินเทอร์เน็ตแล้วลองอีกครั้ง')}
+}
+function guestSnapshot(snapshot=state){const copy=JSON.parse(JSON.stringify(snapshot));if(!['reveal','finished'].includes(copy.phase)){copy.actual=null;copy.guess=null;copy.guessSubmitted=false;if(copy.answerMode==='simultaneous')copy.answers=blankAnswers()}return copy}
 function resumeFromSnapshot(snapshot){
-const local=state,localAnswers=local?.index===snapshot.index?local.answers?.guest:null,localGuess=local?.index===snapshot.index&&local.phase==='guess'?local.guess:null;
+const local=state,localAnswers=local?.index===snapshot.index?local.answers?.guest:null,localGuess=local?.index===snapshot.index&&local.phase==='guess'?local.guess:null,localGuessSubmitted=local?.index===snapshot.index&&local.phase==='guess'&&local.guessSubmitted,localActual=local?.index===snapshot.index&&local.phase==='guess'&&local.chooser==='guest'?local.actual:null;
 state=snapshot;
 if(state.answerMode==='simultaneous'&&state.phase!=='reveal'&&state.phase!=='finished'){
 state.answers=blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();
-if(localAnswers){state.answers.guest={self:localAnswers.self??null,guess:localAnswers.guess??null};for(const field of ['self','guess'])if(Number.isInteger(localAnswers[field])){state.simSubmitted.guest[field]=true;if(!snapshot.simSubmitted?.guest?.[field])send('SIM_ANSWER',{index:state.index,field,n:localAnswers[field]})}}
-}else if(state.phase==='guess'&&!Number.isInteger(state.guess)&&Number.isInteger(localGuess))state.guess=localGuess;
-other=state.players?.[0]?.name||other;coupleTheme=normalizeTheme(state.coupleTheme);resumePending=false;if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}restoreSavedView();saveSession()
+if(localAnswers){state.answers.guest={self:localAnswers.self??null,guess:localAnswers.guess??null};for(const field of ['self','guess'])if(Number.isInteger(localAnswers[field])){state.simSubmitted.guest[field]=true;send('SIM_SUBMITTED',{index:state.index,field})}if(Number.isInteger(localAnswers.self)&&Number.isInteger(localAnswers.guess))send('SIM_ANSWER',{index:state.index,answers:{...state.answers.guest}})}
+}else if(state.phase==='guess'){if(!state.guessSubmitted&&localGuessSubmitted){state.guess=localGuess;state.guessSubmitted=true}if(state.chooser==='guest'&&!Number.isInteger(state.actual)&&Number.isInteger(localActual))state.actual=localActual}
+other=state.players?.[0]?.name||other;coupleTheme=normalizeTheme(state.coupleTheme);resumePending=false;restoreSavedView();saveSession();resendPendingActions()
 }
 function handle(message){
 if(!message||typeof message.type!=='string')return;
 if(message.type==='JOIN'&&isHost&&state){const guest=state.players[1];if(!guest.name){guest.id='guest';guest.name=String(message.name||'ผู้เล่น 2').trim().slice(0,18)||'ผู้เล่น 2';guest.token=String(message.token||'');guest.ready=false;other=guest.name}else if(!guest.token||guest.token!==message.token){send('ROOM_FULL');setTimeout(()=>{try{conn?.close()}catch(e){}},50);return}send('SYNC',{state:guestSnapshot()});if(state.phase==='lobby')updateLobby();saveSession();return}
-if(message.type==='ROOM_FULL'&&!isHost){toast('ห้องนี้มีผู้เล่นอื่นอยู่แล้ว');resumePending=false;clearSavedSession();state=null;destroyPeer();show('home');return}
+if(message.type==='ROOM_FULL'&&!isHost){toast('ห้องนี้มีผู้เล่นอื่นอยู่แล้ว');resumePending=false;clearSavedSession();state=null;disconnectFirebaseRoom();show('home');return}
 if(message.type==='SYNC'&&!isHost&&message.state){resumeFromSnapshot(message.state);return}
 if(message.type==='LOBBY'&&!isHost&&message.state){state=message.state;other=state.players[0].name;coupleTheme=normalizeTheme(state.coupleTheme);show('lobby');updateLobby();saveSession();return}
 if(message.type==='READY'&&isHost&&message.role==='guest'&&state.phase==='lobby'){const guest=state.players.find(p=>p.id==='guest');if(guest)guest.ready=true;updateLobby();send('LOBBY',{state});return}
 if(message.type==='START'&&!isHost&&message.state){state=message.state;show('game');renderQuestion();return}
-if(message.type==='ACTUAL'&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4&&state.answerMode!=='simultaneous'&&state.phase==='choose'&&message.role===state.chooser){state.actual=message.n;state.phase='guess';configureClassicPhase();if(state.chooser!==myRole()){startGuessTimer();toast('อีกคนเลือกแล้ว · ถึงตาคุณทาย')}saveSession();return}
-if(message.type==='GUESS'&&isHost&&state.phase==='guess'){state.guess=Number.isInteger(message.n)?message.n:null;reveal();return}
-if(message.type==='REVEAL'&&!isHost){clearInterval(timerId);state.actual=message.actual;state.guess=Number.isInteger(message.guess)?message.guess:null;state.score=message.score;state.phase='reveal';const entry={question:questionFor()[1],answerMode:'turns',actual:message.actual,guess:message.guess,ok:!!message.ok,chooser:state.chooser};state.history[state.index]=entry;renderReveal(entry);saveSession();return}
-if(message.type==='SIM_ANSWER'&&isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'&&message.index===state.index&&['self','guess'].includes(message.field)&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4){if(!Number.isInteger(state.answers.guest[message.field])){state.answers.guest[message.field]=message.n;state.simSubmitted.guest[message.field]=true;publishSimProgress()}return}
+if(message.type==='ACTUAL_READY'&&state.answerMode!=='simultaneous'&&state.phase==='choose'&&message.index===state.index&&message.role===state.chooser){state.phase='guess';configureClassicPhase();if(state.chooser!==myRole()){startGuessTimer();toast('อีกคนเลือกแล้ว · ถึงตาคุณทาย')}saveSession();return}
+if(message.type==='GUESS'&&state.chooser===myRole()&&state.phase==='guess'&&message.index===state.index){state.guess=Number.isInteger(message.n)&&message.n>=1&&message.n<=4?message.n:null;state.guessSubmitted=true;reveal();return}
+if(message.type==='REVEAL'&&state.chooser!==myRole()&&state.phase==='guess'&&message.index===state.index){clearInterval(timerId);state.actual=message.actual;state.guess=Number.isInteger(message.guess)?message.guess:null;state.guessSubmitted=true;state.score=message.score;state.phase='reveal';const entry={question:questionFor()[1],answerMode:'turns',actual:message.actual,guess:message.guess,ok:!!message.ok,chooser:state.chooser};state.history[state.index]=entry;renderReveal(entry);saveSession();return}
+if(message.type==='SIM_SUBMITTED'&&isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'&&message.index===state.index&&['self','guess'].includes(message.field)){state.simSubmitted.guest[message.field]=true;publishSimProgress();return}
+if(message.type==='SIM_ANSWER'&&isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'&&message.index===state.index&&['self','guess'].every(field=>Number.isInteger(message.answers?.[field])&&message.answers[field]>=1&&message.answers[field]<=4)){state.answers.guest={self:message.answers.self,guess:message.answers.guess};state.simSubmitted.guest={self:true,guess:true};publishSimProgress();return}
 if(message.type==='SIM_PROGRESS'&&!isHost&&state.answerMode==='simultaneous'&&message.index===state.index){state.simSubmitted=message.submitted||state.simSubmitted;renderSimultaneous();saveSession();return}
 if(message.type==='SIM_REVEAL'&&!isHost&&message.index===state.index){state.answers=message.answers;state.simSubmitted={host:{self:true,guess:true},guest:{self:true,guess:true}};state.score=message.score;const entry={question:questionFor()[1],answerMode:'simultaneous',answers:message.answers,correct:message.correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);saveSession();return}
 if(message.type==='NEXT_REQUEST'&&isHost){next();return}
@@ -232,7 +331,7 @@ if(message.type==='NEXT'&&!isHost&&message.state){state=message.state;renderQues
 if(message.type==='FINISH'&&!isHost&&message.state){state=message.state;finish();return}
 if(message.type==='REMATCH_REQUEST'&&isHost&&state.phase==='finished')startRematch()
 }
-function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
+function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!state.guessSubmitted)startGuessTimer()}
 $('#answerMode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedAnswerMode=button.dataset.value;updateSettingControls();if(isHost&&state?.phase==='lobby')publishLobbySettings()};
 $('#themeOptions').onclick=e=>{const button=e.target.closest('[data-emoji],[data-theme]');if(!button||button.disabled)return;if(button.dataset.emoji)coupleTheme.emoji=button.dataset.emoji;if(button.dataset.theme)coupleTheme.palette=button.dataset.theme;coupleTheme=normalizeTheme(coupleTheme);applyTheme(coupleTheme);if(isHost&&state?.phase==='lobby')publishLobbySettings()};
 $('#coupleName').oninput=e=>{coupleTheme.name=e.target.value.slice(0,24);applyTheme(coupleTheme)};
@@ -242,8 +341,9 @@ $('#forgetSessionBtn').onclick=()=>{clearSavedSession();toast('ล้างห�
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.remove('hidden')});
 window.addEventListener('appinstalled',()=>{$('#installBtn').classList.add('hidden');installPrompt=null;toast('เพิ่ม LOVE DUEL บนหน้าจอแล้ว')});
 $('#installBtn').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('#installBtn').classList.add('hidden')};
-$('#homeBtn').onclick=()=>{clearSavedSession();destroyPeer();location.reload()};
-$('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){if(isHost)reveal();else{send('GUESS',{n:state.guess});$('#revealNowBtn').disabled=true;$('#revealNowBtn').textContent='รอเฉลย…';$('#roleBanner').textContent='ส่งคำตอบแล้ว · รอเจ้าของห้องเฉลย';saveSession()}}};
+$('#homeBtn').onclick=()=>{clearSavedSession();disconnectFirebaseRoom();location.reload()};
+$('#revealNowBtn').onclick=()=>{if(state?.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){send('GUESS',{index:state.index,n:state.guess});$('#revealNowBtn').disabled=true;$('#revealNowBtn').textContent='รอเฉลย…';$('#roleBanner').textContent='ส่งคำตอบแล้ว · รออีกคนเฉลย';saveSession()}};
 $('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเล่นอีกครั้งแล้ว')}else toast('กลับเข้าห้องเดิมก่อน แล้วค่อยเล่นซ้ำ')};
 applyTheme(coupleTheme);displayResume();updateLobby();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+
