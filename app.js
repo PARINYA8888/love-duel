@@ -346,4 +346,3 @@ $('#revealNowBtn').onclick=()=>{if(state?.phase==='guess'&&state.chooser!==myRol
 $('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเล่นอีกครั้งแล้ว')}else toast('กลับเข้าห้องเดิมก่อน แล้วค่อยเล่นซ้ำ')};
 applyTheme(coupleTheme);displayResume();updateLobby();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
-
