@@ -66,18 +66,24 @@ const questions=[
 ['อนาคต','ธรรมเนียมเล็ก ๆ ของคู่เราที่ฉันอยากให้มีต่อไปคืออะไร?',['เดตประจำเดือน','ส่งข้อความก่อนนอน','ฉลองเรื่องเล็ก ๆ','ถ่ายรูปเก็บทุกทริป']],
 ['อนาคต','ถ้าเราได้ทำโปรเจกต์สนุก ๆ ด้วยกัน ฉันเลือกอะไร?',['ทำอัลบั้มรูป','ปลูกต้นไม้','ทำคลิปเที่ยว','ลองขายของหรือทำงานฝีมือ']]
 ];
-let peer=null,conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=20,selectedMode='alternate',timerId=null;
+const expandedByCategory=Object.fromEntries(categoryNamesForBank().map(name=>[name,expandedLoveQuestions.filter(item=>item[0]===name)]));
+function categoryNamesForBank(){return ['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ']}
+let extrasLeft=1000-questions.length,bankTurn=0;
+while(extrasLeft>0){const category=categoryNamesForBank()[bankTurn%6],extra=expandedByCategory[category].shift();if(!extra){bankTurn++;if(bankTurn>6*200)break;continue}questions.push(extra);extrasLeft--;bankTurn++}
+let peer=null,conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=8,selectedMode='alternate',selectedGame='quiz',timerId=null;
 let selectedAnswerMode='turns',resumePending=false,reconnectTimer=null,resumeAttempts=0,sessionToken='',savedSession=null,installPrompt=null,joinAttempts=0,joinRetryTimer=null,connectionTimer=null;
 let coupleTheme={name:'คู่ของเรา',emoji:'♥',palette:'rose'};
 const categoryNames=['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ'];
-const defaultCategories=['ความทรงจำ','ความชอบ','อนาคต'];
-const roundOptions=[5,10,15,20,30,40];
+const defaultCategories=['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ'];
+const roundOptions=[8,10,15,20,30,40];
 const sessionKey='love-duel-session-v2';
 const paletteMap={rose:['#ff5c7a','#ff8a65'],violet:['#a985ff','#ff7eaa'],ocean:['#55b8ff','#6ce0d5'],mint:['#51d6ad','#b7dd6a']};
 const emojiChoices=['♥','💕','🐻','🐰','🌙','☀️'];
 const defaultTheme={name:'คู่ของเรา',emoji:'♥',palette:'rose'};
 let selectedCategories=[...defaultCategories];
 savedSession=readSavedSession();
+if(savedSession?.state&&!savedSession.state.gameType)savedSession.state.gameType='quiz';
+if(savedSession?.state)selectedGame=savedSession.state.gameType;
 if(savedSession?.state?.coupleTheme)coupleTheme=normalizeTheme(savedSession.state.coupleTheme);
 function show(name){Object.values(screens).forEach(screen=>screen.classList.remove('active'));screens[name].classList.add('active');window.scrollTo(0,0)}
 function protectPullToRefresh(){let startY=0;document.addEventListener('touchstart',event=>{startY=event.touches[0].clientY},{passive:true});document.addEventListener('touchmove',event=>{const y=event.touches[0].clientY;if(window.scrollY<=0&&y>startY)event.preventDefault()},{passive:false});document.addEventListener('touchend',()=>{startY=0},{passive:true});window.addEventListener('beforeunload',event=>{saveSession();if(state&&['choose','guess','simultaneous'].includes(state.phase)){event.preventDefault();event.returnValue=''}})}
@@ -103,6 +109,7 @@ if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(round
 publishLobbySettings(true);
 }else updateSettingControls();
 };
+$('#gameOptions').onclick=e=>{const button=e.target.closest('[data-game]');if(!button||button.disabled)return;selectedGame=button.dataset.game;if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
 $('#allCategoriesBtn').onclick=()=>{if(state&&!isHost)return;selectedCategories=[...categoryNames];if(state&&isHost)publishLobbySettings(true);else updateSettingControls()};
 $('#rounds').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedRounds=Number(button.dataset.value);if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
 $('#mode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedMode=button.dataset.value;if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
@@ -110,7 +117,9 @@ $('#createBtn').onclick=()=>setupHost();$('#joinBtn').onclick=()=>setupGuest();
 $('#copyRoom').onclick=async()=>{try{await navigator.clipboard.writeText(room);toast('คัดลอกรหัสห้องแล้ว')}catch(e){toast('คัดลอกไม่ได้ กรุณาจดรหัสห้องไว้')}};
 $('#readyBtn').onclick=()=>{if(!state||!conn?.open)return;if(isHost&&state.players.every(p=>p.name&&p.ready)){startGame();return}const role=myRole(),player=state.players.find(p=>p.id===role);if(!player||player.ready)return;player.ready=true;updateLobby();send('READY',{role});if(isHost)send('LOBBY',{state})};
 $('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){send('GUESS',{n:state.guess});if(isHost)reveal();}};$('#nextBtn').onclick=next;
-$('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเล่นอีกครั้งแล้ว')}else toast('การเชื่อมต่อขาดหาย กรุณาโหลดหน้าแล้วเข้าห้องใหม่')};
+$('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเริ่มเกมใหม่แล้ว')}else toast('การเชื่อมต่อขาดหาย กรุณาโหลดหน้าแล้วเข้าห้องใหม่')};
+$('#chooseGameBtn').onclick=()=>requestGameSelection();$('#selectGameBtn').onclick=()=>requestGameSelection();
+$('#homeBtn').onclick=()=>{clearSavedSession();destroyPeer();state=null;room='';other='';show('home')};
 $('#homeBtn').onclick=()=>location.reload();
 updateLobby();
 
@@ -131,21 +140,21 @@ function destroyPeer(){if(reconnectTimer){clearTimeout(reconnectTimer);reconnect
 function setConn(ok){$('#connection').textContent=ok?(conn?.open?'เชื่อมต่อแล้ว':'เซิร์ฟเวอร์พร้อม'):resumePending?'กำลังกลับเข้าห้อง…':'ยังไม่เชื่อมต่อ';$('#connection').className='connection '+(ok?'online':'offline')}
 function updateLobby(){
 const ps=state?.players||[];
-if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||20;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme)}
+if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||8;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';selectedGame=state.gameType||'quiz';coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme)}
 [['#p1',ps[0]],['#p2',ps[1]]].forEach(([id,p])=>{const el=$(id);el.querySelector('b').textContent=p?.name||'รอผู้เล่น';el.querySelector('small').textContent=!p?.name?'ยังไม่พร้อม':p.ready?'พร้อมแล้ว':p.id==='guest'&&!conn?.open?'กำลังกลับมา…':'ยังไม่พร้อม';el.classList.toggle('ready',!!p?.ready)});
 $('#roomCode').textContent=room;const bothReady=ps.length===2&&ps.every(p=>p?.name&&p.ready);
 $('#lobbyHint').textContent=isHost?(!ps[1]?.name?'ส่งรหัสห้องให้อีกคน แล้วรอให้เข้ามา':!conn?.open?'รออีกคนกลับมาเชื่อมต่อ…':bothReady?'ทั้งคู่พร้อมแล้ว กดเริ่มเกมได้เลย':'กด “พร้อมเล่น” เมื่อพร้อม'):'รอเจ้าของห้องเริ่มเกม';
 const mePlayer=ps.find(p=>p?.id===myRole());$('#readyBtn').textContent=isHost&&!conn?.open?'รอผู้เล่น':isHost&&bothReady?'เริ่มเกม':'พร้อมเล่น';$('#readyBtn').disabled=isHost?(!conn||!conn.open||!!mePlayer?.ready&&!bothReady):(!conn||!conn.open||!!mePlayer?.ready);
 updateSettingControls();updateThemeControls();saveSession()
 }
-function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,coupleTheme:normalizeTheme(coupleTheme),index:0,questionOrder,chooser:null,chooserByRound:{},actual:null,guess:null,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
-function publishLobbySettings(shuffleQuestions=false){if(!isHost||!state||state.phase!=='lobby')return;state.categories=[...selectedCategories];state.rounds=selectedRounds;state.mode=selectedMode;state.answerMode=selectedAnswerMode;state.coupleTheme=normalizeTheme(coupleTheme);if(shuffleQuestions){state.questionOrder=shuffledQuestionOrder(selectedCategories);state.chooserByRound={}}updateLobby();send('LOBBY',{state})}
-function updateSettingControls(){const available=questionsInCategories().length,validRounds=roundOptions.filter(n=>n<=available);if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(n=>n<selectedRounds).pop()||validRounds[0]||5;$('#questionCount').textContent=state&&!isHost?'เจ้าของห้องเลือกหมวดคำถามให้ทั้งคู่':'มี '+available+' คำถาม จาก '+selectedCategories.length+' หมวดที่เลือก';document.querySelectorAll('#categories [data-category]').forEach(b=>{const selected=selectedCategories.includes(b.dataset.category);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.disabled=!!state&&(!isHost||state.phase!=='lobby')});document.querySelectorAll('#rounds button').forEach(b=>{const round=Number(b.dataset.value);b.classList.toggle('selected',round===selectedRounds);b.disabled=round>available||(!!state&&(!isHost||state.phase!=='lobby'))});document.querySelectorAll('#mode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedMode);b.disabled=selectedAnswerMode==='simultaneous'||!!state&&(!isHost||state.phase!=='lobby')});document.querySelectorAll('#answerMode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedAnswerMode);b.disabled=!!state&&(!isHost||state.phase!=='lobby')});$('#chooserSettings').classList.toggle('hidden',selectedAnswerMode==='simultaneous');$('#allCategoriesBtn').disabled=!!state&&(!isHost||state.phase!=='lobby')}
+function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],gameType:selectedGame,categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,coupleTheme:normalizeTheme(coupleTheme),index:0,questionOrder,chooser:null,chooserByRound:{},actual:null,guess:null,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
+function publishLobbySettings(shuffleQuestions=false){if(!isHost||!state||state.phase!=='lobby')return;state.gameType=selectedGame;state.categories=[...selectedCategories];state.rounds=selectedRounds;state.mode=selectedMode;state.answerMode=selectedAnswerMode;state.coupleTheme=normalizeTheme(coupleTheme);if(shuffleQuestions){state.questionOrder=shuffledQuestionOrder(selectedCategories);state.chooserByRound={}}updateLobby();send('LOBBY',{state})}
+function updateSettingControls(){const available=questionsInCategories().length,validRounds=roundOptions.filter(n=>n<=available),locked=!!state&&(!isHost||state.phase!=='lobby');if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(n=>n<selectedRounds).pop()||validRounds[0]||5;$('#questionCount').textContent=state&&!isHost?'เจ้าของห้องเลือกหมวดคำถามให้ทั้งคู่':'มี '+available+' คำถาม จาก '+selectedCategories.length+' หมวดที่เลือก';document.querySelectorAll('#categories [data-category]').forEach(b=>{const selected=selectedCategories.includes(b.dataset.category);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.querySelector('.category-copy small').textContent=questions.filter(q=>q[0]===b.dataset.category).length+' คำถาม';b.disabled=locked});document.querySelectorAll('#rounds button').forEach(b=>{const round=Number(b.dataset.value);b.classList.toggle('selected',round===selectedRounds);b.disabled=round>available||locked});document.querySelectorAll('#mode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedMode);b.disabled=selectedAnswerMode==='simultaneous'||locked});document.querySelectorAll('#answerMode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedAnswerMode);b.disabled=locked});document.querySelectorAll('#gameOptions [data-game]').forEach(b=>{const selected=b.dataset.game===selectedGame;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.disabled=locked});$('#questionSettings').classList.toggle('hidden',selectedGame!=='quiz');$('.settings').classList.toggle('hidden',selectedGame!=='quiz');$('#chooserSettings').classList.toggle('hidden',selectedAnswerMode==='simultaneous');$('#allCategoriesBtn').disabled=locked}
 function startGuessTimer(){clearInterval(timerId);if(state.phase!=='guess'||Number.isInteger(state.guess))return;$('#talk').classList.remove('hidden');$('#timer').textContent=60;timerId=setInterval(()=>{const n=Number($('#timer').textContent)-1;$('#timer').textContent=n;if(n<=0){clearInterval(timerId);if(!Number.isInteger(state.guess)){state.guess=null;lockChoices();$('#roleBanner').textContent='หมดเวลา · กำลังเฉลยคำตอบ';toast('หมดเวลา ระบบกำลังเฉลยคำตอบ');if(isHost)reveal();else send('GUESS',{n:null})}}},1000)}
 function blankAnswers(){return{host:{self:null,guess:null},guest:{self:null,guess:null}}}
 function blankSubmitted(){return{host:{self:false,guess:false},guest:{self:false,guess:false}}}
 function renderQuestion(resume=false){
-clearInterval(timerId);const item=questionFor();$('#qNo').textContent=(state.index+1)+' / '+state.rounds;$('#category').textContent=item[0];$('#question').textContent=item[1];$('#choices').innerHTML=item[2].map((t,i)=>'<button class="choice" data-n="'+(i+1)+'"><span class="num">'+(i+1)+'</span><span class="txt">'+t+'</span></button>').join('');
+clearInterval(timerId);$('#quizPanel').classList.remove('hidden');$('#miniPanel').classList.add('hidden');const item=questionFor();$('#qNo').textContent=(state.index+1)+' / '+state.rounds;$('#category').textContent=item[0];$('#question').textContent=item[1];$('#choices').innerHTML=item[2].map((t,i)=>'<button class="choice" data-n="'+(i+1)+'"><span class="num">'+(i+1)+'</span><span class="txt">'+t+'</span></button>').join('');
 $('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#simProgress').classList.add('hidden');
 if(!resume){state.actual=null;state.guess=null;state.answers=blankAnswers();state.simSubmitted=blankSubmitted();state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';state.chooser=state.answerMode==='simultaneous'?null:chooserFor(state.index)}
 else if(state.answerMode!=='simultaneous'&&!state.chooser)state.chooser=chooserFor(state.index);
@@ -181,12 +190,182 @@ updateScores();saveSession()
 }
 function reveal(){clearInterval(timerId);if(!isHost||state.phase==='reveal'||!Number.isInteger(state.actual))return;const ok=state.actual===state.guess,guesser=state.chooser==='host'?'guest':'host';if(ok)state.score[guesser]++;const entry={question:questionFor()[1],answerMode:'turns',actual:state.actual,guess:state.guess,ok,chooser:state.chooser};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:state.actual,guess:state.guess,ok,score:state.score});saveSession()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
-function historyMarkup(h,i){if(h.answerMode==='simultaneous'){const count=Number(!!h.correct?.host)+Number(!!h.correct?.guest);return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">'+escapeHtml(state.players[0].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.host.self))+' · '+escapeHtml(state.players[1].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.guest.guess))+'</small><small class="answer-detail">'+escapeHtml(state.players[1].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.guest.self))+' · '+escapeHtml(state.players[0].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.host.guess))+'</small></span><span class="badge '+(count?'ok':'miss')+'">'+count+'/2</span></div>'}return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">คำตอบจริง: '+escapeHtml(choiceTextAt(h.question,h.actual))+' · ทาย: '+escapeHtml(choiceTextAt(h.question,h.guess))+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+(h.ok?'ตรงกัน':'ไม่ตรง')+'</span></div>'}
-function finish(){clearInterval(timerId);show('result');applyTheme(state.coupleTheme);const mine=state.score[myRole()],theirs=state.score[myRole()==='host'?'guest':'host'],max=state.rounds*(state.answerMode==='simultaneous'?2:1);const correct=state.history.reduce((total,h)=>total+(h.answerMode==='simultaneous'?Number(!!h.correct?.host)+Number(!!h.correct?.guest):Number(!!h.ok)),0);const pct=Math.round(correct/Math.max(max,1)*100);$('#percent').textContent=pct+'%';$('#resultSummary').textContent=pct>=80?'รู้ใจกันสุด ๆ':pct>=50?'เริ่มรู้ใจกันมากขึ้นแล้ว':'คะแนนไม่สำคัญเท่ากับได้คุยกัน';$('#finalMe').textContent=mine;$('#finalOther').textContent=theirs;$('#historyList').innerHTML=state.history.map(historyMarkup).join('');saveSession()}
-function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;state.index=0;state.score={host:0,guest:0};state.history=[];state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion();send('START',{state})}
+function historyMarkup(h,i){if(h.kind==='mini')return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">'+escapeHtml(h.detail||'')+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+escapeHtml(h.badge||'จบเกม')+'</span></div>';if(h.answerMode==='simultaneous'){const count=Number(!!h.correct?.host)+Number(!!h.correct?.guest);return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">'+escapeHtml(state.players[0].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.host.self))+' · '+escapeHtml(state.players[1].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.guest.guess))+'</small><small class="answer-detail">'+escapeHtml(state.players[1].name)+': '+escapeHtml(choiceTextAt(h.question,h.answers.guest.self))+' · '+escapeHtml(state.players[0].name)+' ทาย '+escapeHtml(choiceTextAt(h.question,h.answers.host.guess))+'</small></span><span class="badge '+(count?'ok':'miss')+'">'+count+'/2</span></div>'}return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">คำตอบจริง: '+escapeHtml(choiceTextAt(h.question,h.actual))+' · ทาย: '+escapeHtml(choiceTextAt(h.question,h.guess))+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+(h.ok?'ตรงกัน':'ไม่ตรง')+'</span></div>'}
+function finish(){
+clearInterval(timerId);show('result');applyTheme(state.coupleTheme);
+const role=myRole(),otherRole=role==='host'?'guest':'host',mine=state.score?.[role]||0,theirs=state.score?.[otherRole]||0;
+const winner=mine===theirs?null:mine>theirs?role:otherRole,players=state.players||[];
+const mineName=players[role==='host'?0:1]?.name||'คุณ',theirName=players[otherRole==='host'?0:1]?.name||'อีกคน';
+const max=state.gameType==='quiz'?state.rounds*(state.answerMode==='simultaneous'?2:1):(state.mini?.maxRounds||8)*(['sync','split'].includes(state.gameType)?2:1);
+const correct=state.gameType==='quiz'?state.history.reduce((total,h)=>total+(h.answerMode==='simultaneous'?Number(!!h.correct?.host)+Number(!!h.correct?.guest):Number(!!h.ok)),0):mine+theirs;
+const pct=Math.min(100,Math.round(correct/Math.max(max,1)*100));
+$('#percent').textContent=pct+'%';
+$('#resultTitle').textContent=winner?'🏆 '+(winner===role?mineName:theirName)+' ชนะ!':'🤝 คะแนนเสมอกัน';
+$('#resultSummary').textContent=state.gameType==='quiz'?'ทายตรงกัน '+correct+' จาก '+max+' ครั้ง · เล่นทั้งหมด '+state.rounds+' ข้อ':(miniInfo().title+' · แข่ง '+(state.mini?.maxRounds||8)+' รอบ · '+(winner?'ผู้ชนะคือ '+(winner===role?mineName:theirName):'เสมอกัน'));
+$('#finalMe').textContent=mine;$('#finalOther').textContent=theirs;
+$('.history h3').textContent=state.gameType==='quiz'?'สรุปคำถาม':'สรุปเกม';
+$('#historyList').innerHTML=(state.history||[]).map(historyMarkup).join('');saveSession()
+}
+function createMiniState(type){
+const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},status:'choose',last:null};
+if(type==='ox')return{...base,board:Array(9).fill(''),turn:'host',winner:null,status:'play'};
+if(type==='rps')return{...base,status:'choose'};
+if(type==='cannon')return{...base,target:Math.round(160+Math.random()*280),wind:Math.floor(Math.random()*13)-6,status:'aim'};
+if(type==='target')return{...base,target:Math.floor(Math.random()*10)+1};
+return base
+}
+function miniInfo(){
+return({
+ox:{title:'OX Duel',icon:'⭕',description:'แข่งวางหมาก 8 กระดาน ใครเรียงครบ 3 ช่องได้แต้ม'},
+rps:{title:'เป่ายิ้งฉุบ',icon:'✊',description:'เลือกพร้อมกันแบบลับ แข่งทั้งหมด 8 รอบ'},
+cannon:{title:'Cannon Duel',icon:'🚀',description:'ปรับมุมและแรงยิง ใครเข้าใกล้เป้ากว่าได้แต้ม · 8 รอบ'},
+sync:{title:'ใจตรงกัน',icon:'🧲',description:'เลือกคำตอบพร้อมกัน ถ้าเลือกเหมือนกันทั้งคู่ได้คนละ 1 แต้ม'},
+target:{title:'ทายเลขเป้าหมาย',icon:'🎯',description:'เดาเลข 1–10 แบบลับ ใครใกล้เลขเป้าหมายกว่าได้แต้ม'},
+split:{title:'แบ่งหรือเก็บ',icon:'💎',description:'เลือกพร้อมกันแบบลับ ใจดีได้แต้ม เสี่ยงเก็บมีโอกาสได้เพิ่ม'},
+high:{title:'ชิงเลข',icon:'⚡',description:'เลือกเลข 1–5 แบบลับ ใครได้เลขสูงกว่าเก็บแต้ม'}
+})[state.gameType]||{title:'เกมคำถาม',icon:'💞',description:'คลังคำถามสำหรับคู่รัก'}
+}
+function updateMiniScores(){const role=myRole();$('#miniScoreMe').textContent=state.score[role]||0;$('#miniScoreOther').textContent=state.score[role==='host'?'guest':'host']||0}
+function renderMiniGame(){
+if(!state?.mini)return;
+$('#quizPanel').classList.add('hidden');$('#miniPanel').classList.remove('hidden');
+const info=miniInfo(),mini=state.mini,role=myRole(),mine=!!mini.submitted?.[role];
+$('#miniIcon').textContent=info.icon;$('#miniTitle').textContent=info.title;$('#miniDescription').textContent=info.description;
+$('#miniRoundLabel').textContent=state.gameType==='ox'?'กระดานที่':'รอบที่';
+$('#miniRound').textContent=mini.round+' / '+mini.maxRounds;updateMiniScores();
+const hostName=escapeHtml(state.players?.[0]?.name||'คนที่ 1'),guestName=escapeHtml(state.players?.[1]?.name||'คนที่ 2');
+let html='';
+if(state.gameType==='ox'){
+  const mark=role==='host'?'X':'O',turnName=mini.turn==='host'?hostName:guestName;
+  if(mini.status==='reveal'&&mini.last){
+    $('#miniBanner').textContent='จบกระดานที่ '+mini.round;
+    const winner=mini.last.winner;
+    const outcome=winner==='draw'?'กระดานนี้เสมอกัน':escapeHtml(state.players[winner==='X'?0:1].name)+' ชนะกระดานนี้';
+    html='<div class="ttt-board" role="group" aria-label="กระดาน OX">'+mini.board.map(cell=>'<div class="ttt-cell '+(cell?'occupied':'')+' '+(cell==='X'?'mark-x':'mark-o')+'">'+escapeHtml(cell)+'</div>').join('')+'</div><p class="mini-note">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'กระดานถัดไป')+'</button>'
+  }else{
+    $('#miniBanner').textContent=mini.turn===role?'ถึงตาคุณวาง '+mark:'รอ '+(mini.turn==='host'?'X':'O')+' · '+turnName+' เลือกช่อง';
+    html='<div class="ttt-board" role="group" aria-label="กระดาน OX">'+mini.board.map((cell,index)=>'<button type="button" class="ttt-cell '+(cell?'occupied':'')+' '+(cell==='X'?'mark-x':'mark-o')+'" data-ttt="'+index+'" aria-label="ช่อง '+(index+1)+(cell?' '+cell:' ว่าง')+'" '+(cell||mini.turn!==role||!conn?.open?'disabled':'')+'>'+escapeHtml(cell)+'</button>').join('')+'</div><p class="mini-note">X · '+hostName+' &nbsp; O · '+guestName+'</p>'
+  }
+}
+if(state.gameType==='rps'){
+  const submitted=mini.submitted||{};$('#miniBanner').textContent=mini.status==='reveal'?'เฉลยรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกพร้อมกันโดยไม่เห็นคำตอบของอีกคน';
+  if(mini.status==='reveal'&&mini.last){
+    const labels={rock:'ค้อน',paper:'กระดาษ',scissors:'กรรไกร'},winner=mini.last.winner;
+    html='<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+labels[mini.last.host]+'</strong></div><span>VS</span><div><small>'+guestName+'</small><strong>'+labels[mini.last.guest]+'</strong></div></div><p class="mini-outcome">'+(winner?escapeHtml(state.players[winner==='host'?0:1].name)+' ชนะรอบนี้':'เสมอกันรอบนี้')+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
+  }else html='<div class="rps-choices">'+[['rock','✊','ค้อน'],['paper','✋','กระดาษ'],['scissors','✌️','กรรไกร']].map(([value,icon,label])=>'<button type="button" class="rps-choice" data-rps="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><span>'+icon+'</span><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
+}
+if(state.gameType==='cannon'){
+  const submitted=mini.submitted||{},scene='<div class="cannon-scene"><span class="cannon-player left">🚀</span><span class="cannon-target">🎯</span><span class="cannon-player right">🚀</span><small>เป้าหมาย '+mini.target+' ม. · ลม '+(mini.wind>0?'+':'')+mini.wind+'</small></div>';
+  $('#miniBanner').textContent=mini.status==='reveal'?'เปิดผลการยิงแล้ว':mine?'ล็อกวิถีกระสุนแล้ว · รออีกคนยิง':'ปรับมุมและแรงยิง แล้วกดยิงพร้อมกัน';
+  if(mini.status==='reveal'&&mini.last)html=scene+'<div class="cannon-results"><div><small>'+hostName+'</small><strong>'+mini.last.host.range+' ม.</strong><span>ห่างเป้า '+mini.last.host.distance+' ม.</span></div><div><small>'+guestName+'</small><strong>'+mini.last.guest.range+' ม.</strong><span>ห่างเป้า '+mini.last.guest.distance+' ม.</span></div></div><p class="mini-outcome">'+(mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ยิงใกล้กว่า':'เสมอกัน!')+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'เริ่มรอบถัดไป')+'</button>';
+  else html=scene+'<div class="cannon-controls"><label for="aimRange">มุมยิง <strong id="aimValue">'+cannonAimLocal+'°</strong></label><input id="aimRange" type="range" min="15" max="75" value="'+cannonAimLocal+'" '+(mine?'disabled':'')+'><label for="powerRange">แรงยิง <strong id="powerValue">'+cannonPowerLocal+'%</strong></label><input id="powerRange" type="range" min="35" max="85" value="'+cannonPowerLocal+'" '+(mine?'disabled':'')+'></div><button type="button" class="primary cannon-fire" data-cannon-submit '+(mine||!conn?.open?'disabled':'')+'>'+(mine?'ยิงแล้ว · รออีกคน':'ยิงปืนใหญ่')+'</button><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ เล็งแล้ว':'กำลังเล็ง')+' · '+guestName+' '+(submitted.guest?'✓ เล็งแล้ว':'กำลังเล็ง')+'</p>'
+}
+if(['sync','target','split','high'].includes(state.gameType)){
+  const choices=miniOptions(state.gameType),submitted=mini.submitted||{};
+  $('#miniBanner').textContent=mini.status==='reveal'?'เปิดผลรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกคำตอบของคุณแบบลับ';
+  if(mini.status==='reveal'&&mini.last){
+    const labels=Object.fromEntries(choices),a=labels[String(mini.last.host)]||mini.last.host,b=labels[String(mini.last.guest)]||mini.last.guest,points=mini.last.points||{host:0,guest:0};
+    let outcome='เสมอกันรอบนี้';
+    if(state.gameType==='sync')outcome=mini.last.host===mini.last.guest?'ใจตรงกัน! ได้คนละ 1 แต้ม':'คำตอบไม่เหมือนกัน รอบนี้ไม่มีคะแนน';
+    else if(state.gameType==='split')outcome='รอบนี้ '+hostName+' ได้ '+points.host+' แต้ม · '+guestName+' ได้ '+points.guest+' แต้ม';
+    else if(mini.last.winner)outcome=escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะรอบนี้';
+    html='<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+escapeHtml(a)+'</strong><em>+'+(points.host||0)+'</em></div><span>VS</span><div><small>'+guestName+'</small><strong>'+escapeHtml(b)+'</strong><em>+'+(points.guest||0)+'</em></div></div>'+(state.gameType==='target'?'<p class="mini-note">เลขเป้าหมายคือ '+mini.target+'</p>':'')+'<p class="mini-outcome">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
+  }else html='<div class="blind-choices '+(state.gameType==='target'||state.gameType==='high'?'number-choices':'')+'">'+choices.map(([value,label])=>'<button type="button" class="blind-choice" data-choice="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-note">'+(state.gameType==='target'?'เป้าหมายลับอยู่ระหว่าง 1–10 · เลือกเลขที่คิดว่าใกล้ที่สุด':state.gameType==='high'?'เลือกเลข 1–5 สูงกว่าได้แต้ม':'เลือกแบบลับ อีกคนจะเห็นคำตอบเมื่อส่งครบแล้ว')+'</p><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
+}
+$('#miniContent').innerHTML=html;saveSession()
+}
+let cannonAimLocal=45,cannonPowerLocal=65;
+function publishMiniProgress(){if(!isHost||!state?.mini)return;send('MINI_PROGRESS',{gameType:state.gameType,round:state.mini.round,submitted:state.mini.submitted});renderMiniGame()}
+function miniStateChanged(){if(state.phase==='finished'){finish();return}send('MINI_STATE',{state});renderMiniGame()}
+function finishMini(){if(!isHost||state.phase==='finished')return;state.phase='finished';send('FINISH',{state});finish()}
+function tttWinner(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];for(const [a,b,c] of lines)if(board[a]&&board[a]===board[b]&&board[a]===board[c])return board[a];return board.every(Boolean)?'draw':null}
+function handleTttMove(role,index){
+if(!isHost||state.gameType!=='ox'||state.phase!=='mini'||state.mini.status==='reveal'||state.mini.turn!==role||!Number.isInteger(index)||index<0||index>8||state.mini.board[index])return;
+const mark=role==='host'?'X':'O';state.mini.board[index]=mark;const winner=tttWinner(state.mini.board);
+if(winner){
+  state.mini.winner=winner;state.mini.status='reveal';state.mini.last={winner};
+  if(winner==='draw')state.history.push({kind:'mini',question:'เกม OX · กระดาน '+state.mini.round,detail:'กระดานเต็มแล้ว ไม่มีใครเรียงครบ 3 ช่อง',badge:'เสมอ',ok:false});
+  else{const winnerRole=winner==='X'?'host':'guest';state.score[winnerRole]++;state.history.push({kind:'mini',question:'เกม OX · กระดาน '+state.mini.round,detail:'ผู้ชนะ: '+state.players[winnerRole==='host'?0:1].name,badge:'ชนะ',ok:true})}
+  miniStateChanged();return
+}
+state.mini.turn=role==='host'?'guest':'host';send('MINI_STATE',{state});renderMiniGame()
+}
+function submitMiniChoice(role,choice){
+if(!isHost||state.gameType!=='rps'||state.phase!=='mini'||state.mini.status!=='choose'||state.mini.submitted[role]||!['rock','paper','scissors'].includes(choice))return;
+state.mini.submissions[role]=choice;state.mini.submitted[role]=true;
+if(state.mini.submitted.host&&state.mini.submitted.guest){
+  const a=state.mini.submissions.host,b=state.mini.submissions.guest,beats={rock:'scissors',paper:'rock',scissors:'paper'},winner=a===b?null:beats[a]===b?'host':'guest';
+  if(winner)state.score[winner]++;state.mini.last={host:a,guest:b,winner};state.mini.status='reveal';
+  const label={rock:'ค้อน',paper:'กระดาษ',scissors:'กรรไกร'};
+  state.history.push({kind:'mini',question:'เป่ายิ้งฉุบ · รอบ '+state.mini.round,detail:state.players[0].name+': '+label[a]+' · '+state.players[1].name+': '+label[b],badge:winner?state.players[winner==='host'?0:1].name+' ชนะ':'เสมอ',ok:!!winner});miniStateChanged();return
+}
+publishMiniProgress()
+}
+function submitCannonShot(role,shot){
+if(!isHost||state.gameType!=='cannon'||state.phase!=='mini'||state.mini.status!=='aim'||state.mini.submitted[role]||!shot||!Number.isInteger(shot.angle)||shot.angle<15||shot.angle>75||!Number.isInteger(shot.power)||shot.power<35||shot.power>85)return;
+state.mini.submissions[role]=shot;state.mini.submitted[role]=true;
+if(state.mini.submitted.host&&state.mini.submitted.guest){
+  const rangeFor=s=>Math.max(0,Math.round((s.power*.8)**2/9.8*Math.sin(2*s.angle*Math.PI/180)+state.mini.wind*3)),hostRange=rangeFor(state.mini.submissions.host),guestRange=rangeFor(state.mini.submissions.guest),hostDistance=Math.abs(hostRange-state.mini.target),guestDistance=Math.abs(guestRange-state.mini.target),winner=hostDistance===guestDistance?null:hostDistance<guestDistance?'host':'guest';
+  if(winner)state.score[winner]++;state.mini.last={host:{range:hostRange,distance:hostDistance},guest:{range:guestRange,distance:guestDistance},winner};state.mini.status='reveal';
+  state.history.push({kind:'mini',question:'Cannon Duel · รอบ '+state.mini.round,detail:'เป้า '+state.mini.target+' ม. · '+state.players[0].name+' ห่าง '+hostDistance+' ม. · '+state.players[1].name+' ห่าง '+guestDistance+' ม.',badge:winner?state.players[winner==='host'?0:1].name+' ยิงใกล้กว่า':'เสมอกัน',ok:!!winner});miniStateChanged();return
+}
+publishMiniProgress()
+}
+function miniOptions(type){
+if(type==='sync')return[['beach','🌊 ทะเล'],['mountain','🏔️ ภูเข'],['cafe','☕ คาเฟ่'],['home','🏠 อยู่บ้าน']];
+if(type==='split')return[['share','🤝 แบ่งกัน'],['keep','💎 เก็บไว้']];
+if(type==='high')return Array.from({length:5},(_,i)=>[String(i+1),String(i+1)]);
+if(type==='target')return Array.from({length:10},(_,i)=>[String(i+1),String(i+1)]);
+return[]
+}
+function submitBlindChoice(role,choice){
+if(!isHost||!['sync','target','split','high'].includes(state.gameType)||state.phase!=='mini'||state.mini.status!=='choose'||state.mini.submitted[role])return;
+const allowed=miniOptions(state.gameType).map(([value])=>String(value));if(!allowed.includes(String(choice)))return;
+choice=state.gameType==='sync'?String(choice):Number(choice);state.mini.submissions[role]=choice;state.mini.submitted[role]=true;
+if(!state.mini.submitted.host||!state.mini.submitted.guest){publishMiniProgress();return}
+const a=state.mini.submissions.host,b=state.mini.submissions.guest;let winner=null,points={host:0,guest:0};
+if(state.gameType==='sync'){if(a===b)points={host:1,guest:1}}
+if(state.gameType==='target'){const da=Math.abs(a-state.mini.target),db=Math.abs(b-state.mini.target);winner=da===db?null:da<db?'host':'guest';if(winner)points[winner]=1}
+if(state.gameType==='high'){winner=a===b?null:a>b?'host':'guest';if(winner)points[winner]=1}
+if(state.gameType==='split'){if(a==='share'&&b==='share')points={host:1,guest:1};else if(a==='keep'&&b==='share')points={host:2,guest:0};else if(a==='share'&&b==='keep')points={host:0,guest:2}}
+state.score.host+=points.host;state.score.guest+=points.guest;state.mini.last={host:a,guest:b,winner,points};state.mini.status='reveal';
+const names={beach:'ทะเล',mountain:'ภูเขา',cafe:'คาเฟ่',home:'อยู่บ้าน',share:'แบ่งกัน',keep:'เก็บไว้'},label=value=>names[String(value)]||String(value);
+let badge=winner?state.players[winner==='host'?0:1].name+' ชนะ':points.host||points.guest?'ได้คะแนน':'เสมอ';if(state.gameType==='sync')badge=a===b?'ใจตรงกัน':'คำตอบต่างกัน';if(state.gameType==='split')badge='+'+points.host+' : +'+points.guest;
+state.history.push({kind:'mini',question:miniInfo().title+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+' · '+state.players[1].name+': '+label(b),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
+}
+function advanceMini(){
+if(!isHost||state.phase!=='mini'||state.mini.status!=='reveal')return;
+if(state.mini.round>=state.mini.maxRounds){finishMini();return}
+state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.status=state.gameType==='cannon'?'aim':state.gameType==='ox'?'play':'choose';state.mini.last=null;
+if(state.gameType==='ox'){state.mini.board=Array(9).fill('');state.mini.winner=null;state.mini.turn=state.mini.round%2===0?'guest':'host'}
+if(state.gameType==='cannon'){state.mini.target=Math.round(160+Math.random()*280);state.mini.wind=Math.floor(Math.random()*13)-6}
+if(state.gameType==='target')state.mini.target=Math.floor(Math.random()*10)+1;
+send('MINI_STATE',{state:guestSnapshot()});renderMiniGame()
+}
+$('#miniContent').addEventListener('click',event=>{
+const ttt=event.target.closest('[data-ttt]'),rps=event.target.closest('[data-rps]'),choice=event.target.closest('[data-choice]');
+if(ttt){const index=Number(ttt.dataset.ttt);if(isHost)handleTttMove('host',index);else send('MINI_ACTION',{gameType:'ox',index});return}
+if(rps){const value=rps.dataset.rps;if(isHost)submitMiniChoice('host',value);else{if(state.mini.status!=='choose'||state.mini.submitted.guest)return;state.mini.submissions.guest=value;state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:value});renderMiniGame()}return}
+if(choice){const value=choice.dataset.choice;if(isHost)submitBlindChoice('host',value);else{if(state.mini.status!=='choose'||state.mini.submitted.guest)return;state.mini.submissions.guest=state.gameType==='sync'?value:Number(value);state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:value});renderMiniGame()}return}
+if(event.target.closest('[data-cannon-submit]')){const shot={angle:cannonAimLocal,power:cannonPowerLocal};if(isHost)submitCannonShot('host',shot);else{if(state.mini.status!=='aim'||state.mini.submitted.guest)return;state.mini.submissions.guest=shot;state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:'cannon',round:state.mini.round,shot});renderMiniGame()}return}
+if(event.target.closest('[data-mini-next]')){if(isHost)advanceMini();else send('MINI_NEXT_REQUEST',{round:state.mini.round})}
+});
+$('#miniContent').addEventListener('input',event=>{if(event.target.id==='aimRange'){cannonAimLocal=Number(event.target.value);$('#aimValue').textContent=cannonAimLocal+'°'}if(event.target.id==='powerRange'){cannonPowerLocal=Number(event.target.value);$('#powerValue').textContent=cannonPowerLocal+'%'}});
+function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;state.index=0;state.score={host:0,guest:0};state.history=[];if(state.gameType==='quiz'){state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion()}else{state.phase='mini';state.mini=createMiniState(state.gameType);show('game');renderMiniGame()}send('START',{state:guestSnapshot()})}
 function next(){if(state.phase!=='reveal')return;if(!isHost){send('NEXT_REQUEST');return}if(state.index+1>=state.rounds){state.phase='finished';send('FINISH',{state});finish();return}state.index++;state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';renderQuestion();send('NEXT',{state})}
-function startRematch(){if(!isHost||!state.players[1].name||!conn?.open)return toast('อีกคนหลุดจากห้อง จึงเริ่มเกมซ้ำไม่ได้');const token=state.players[1].token;state=makeState();state.players[1].token=token;other=state.players[1].name;show('lobby');updateLobby();send('LOBBY',{state})}
-function restoreSavedView(){if(!state)return;if(state.coupleTheme)applyTheme(state.coupleTheme);if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
+function startRematch(){
+if(!isHost||!state?.players?.[1]?.name||!conn?.open)return toast('อีกคนหลุดจากห้อง จึงเริ่มเกมใหม่ไม่ได้');
+const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme);
+other=guest.name;state=makeState();state.players[1].token=guestToken;state.players.forEach(player=>player.ready=true);state.phase='lobby';startGame();toast('เริ่มเกมใหม่แล้ว · คะแนนเริ่มจากศูนย์')
+}
+function returnToLobby(){
+if(!isHost||!state?.players?.[1]?.name||!conn?.open)return toast('ต้องเชื่อมต่อกับอีกคนก่อนจึงจะเลือกเกมใหม่ได้');
+const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme);
+other=guest.name;state=makeState();state.players[1].token=guestToken;show('lobby');updateLobby();send('LOBBY',{state});toast('กลับไปเลือกเกมได้เลย')
+}
+function requestGameSelection(){if(!state||state.phase==='lobby')return;if(isHost)returnToLobby();else if(conn?.open){send('GAME_SELECT_REQUEST');toast('ส่งคำขอกลับไปเลือกเกมแล้ว')}else toast('การเชื่อมต่อขาดหาย กรุณากลับเข้าห้องใหม่')
+}
+function restoreSavedView(){if(!state)return;if(state.coupleTheme)applyTheme(state.coupleTheme);if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
 function setupHost(resume=false){
 if(!window.Peer)return toast('โหลดระบบออนไลน์ไม่สำเร็จ โปรดรีโหลดหน้าแล้วลองอีกครั้ง');resumePending=resume;resumeAttempts=0;
 if(resume){if(!savedSession)return toast('ไม่พบห้องที่บันทึกไว้');room=savedSession.room;me=savedSession.name;other=savedSession.other;sessionToken=savedSession.token||newToken();state=savedSession.state;coupleTheme=normalizeTheme(state.coupleTheme);if(state.players?.[1]?.name&&!state.players[1].token)state.players[1].token=sessionToken}
@@ -203,14 +382,15 @@ function retryInitialJoin(){if(isHost||resumePending)return false;if(joinRetryTi
 function scheduleGuestReconnect(){if(isHost||!peer||peer.destroyed||reconnectTimer)return;resumePending=true;reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectGuest(0,true)},1800);setConn(false)}
 function connectGuest(attempt=0,persistent=resumePending){if(!peer||peer.destroyed||conn?.open)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}if(conn)try{conn.close()}catch(e){}conn=peer.connect(room,{reliable:true,serialization:'json'});const current=conn;wire(current);connectionTimer=setTimeout(()=>{connectionTimer=null;if(conn!==current||current.open)return;try{current.close()}catch(e){}if(persistent||attempt<2){if(persistent)scheduleGuestReconnect();else setTimeout(()=>connectGuest(attempt+1,false),1200)}else toast('เชื่อมต่อไม่สำเร็จ ลองตรวจรหัสห้องหรือสัญญาณอินเทอร์เน็ต')},15000)}
 function wire(channel=conn){if(!channel)return;channel.on('open',()=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}if(joinRetryTimer){clearTimeout(joinRetryTimer);joinRetryTimer=null}joinAttempts=0;setConn(true);toast(isHost?'แฟนเชื่อมต่อแล้ว':'เข้าห้องสำเร็จ');if(!isHost)send('JOIN',{name:me,token:sessionToken})});channel.on('close',()=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}conn=null;setConn(false);clearInterval(timerId);if(isHost)toast('อีกคนหลุดชั่วคราว · รอให้กลับมาเชื่อมต่อ');else if(state){toast('หลุดชั่วคราว · กำลังกลับเข้าห้อง');scheduleGuestReconnect()}else toast('การเชื่อมต่อถูกตัด')});channel.on('error',e=>{if(conn!==channel)return;if(connectionTimer){clearTimeout(connectionTimer);connectionTimer=null}setConn(false);if(!isHost&&!state&&!resumePending&&retryInitialJoin())return;if(!isHost&&state)scheduleGuestReconnect();else toast('เชื่อมต่อไม่สำเร็จ: '+(e?.type||'ลองใหม่'))});channel.on('data',handle)}
-function guestSnapshot(){const copy=JSON.parse(JSON.stringify(state));if(copy.answerMode==='simultaneous'&&copy.phase!=='reveal'&&copy.phase!=='finished')copy.answers=blankAnswers();return copy}
+function guestSnapshot(){const copy=JSON.parse(JSON.stringify(state));if(copy.answerMode==='simultaneous'&&copy.phase!=='reveal'&&copy.phase!=='finished')copy.answers=blankAnswers();if(copy.gameType&&copy.gameType!=='quiz'&&copy.gameType!=='ox'&&copy.phase==='mini'&&copy.mini?.status!=='reveal')copy.mini.submissions={host:null,guest:null};if(copy.gameType==='target'&&copy.phase==='mini'&&copy.mini?.status!=='reveal')copy.mini.target=null;return copy}
 function resumeFromSnapshot(snapshot){
-const local=state,localAnswers=local?.index===snapshot.index?local.answers?.guest:null,localGuess=local?.index===snapshot.index&&local.phase==='guess'?local.guess:null;
+const local=state,localAnswers=local?.index===snapshot.index?local.answers?.guest:null,localGuess=local?.index===snapshot.index&&local.phase==='guess'?local.guess:null,localMiniSecret=local?.gameType===snapshot.gameType&&local?.mini?.round===snapshot.mini?.round?local.mini.submissions?.guest:null;
 state=snapshot;
 if(state.answerMode==='simultaneous'&&state.phase!=='reveal'&&state.phase!=='finished'){
 state.answers=blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();
 if(localAnswers){state.answers.guest={self:localAnswers.self??null,guess:localAnswers.guess??null};for(const field of ['self','guess'])if(Number.isInteger(localAnswers[field])){state.simSubmitted.guest[field]=true;if(!snapshot.simSubmitted?.guest?.[field])send('SIM_ANSWER',{index:state.index,field,n:localAnswers[field]})}}
 }else if(state.phase==='guess'&&!Number.isInteger(state.guess)&&Number.isInteger(localGuess))state.guess=localGuess;
+if(!isHost&&state.phase==='mini'&&localMiniSecret&&state.mini?.status!=='reveal'){state.mini.submissions.guest=localMiniSecret;state.mini.submitted.guest=true;if(state.gameType==='rps')send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:localMiniSecret});if(state.gameType==='cannon')send('MINI_SUBMIT',{gameType:'cannon',round:state.mini.round,shot:localMiniSecret});if(['sync','target','split','high'].includes(state.gameType))send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:localMiniSecret})}
 other=state.players?.[0]?.name||other;coupleTheme=normalizeTheme(state.coupleTheme);resumePending=false;if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}restoreSavedView();saveSession()
 }
 function handle(message){
@@ -220,19 +400,24 @@ if(message.type==='ROOM_FULL'&&!isHost){toast('ห้องนี้มีผู
 if(message.type==='SYNC'&&!isHost&&message.state){resumeFromSnapshot(message.state);return}
 if(message.type==='LOBBY'&&!isHost&&message.state){state=message.state;other=state.players[0].name;coupleTheme=normalizeTheme(state.coupleTheme);show('lobby');updateLobby();saveSession();return}
 if(message.type==='READY'&&isHost&&message.role==='guest'&&state.phase==='lobby'){const guest=state.players.find(p=>p.id==='guest');if(guest)guest.ready=true;updateLobby();send('LOBBY',{state});return}
-if(message.type==='START'&&!isHost&&message.state){state=message.state;show('game');renderQuestion();return}
+if(message.type==='START'&&!isHost&&message.state){state=message.state;show('game');if(state.gameType&&state.gameType!=='quiz')renderMiniGame();else renderQuestion();return}
 if(message.type==='ACTUAL'&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4&&state.answerMode!=='simultaneous'&&state.phase==='choose'&&message.role===state.chooser){state.actual=message.n;state.phase='guess';configureClassicPhase();if(state.chooser!==myRole()){startGuessTimer();toast('อีกคนเลือกแล้ว · ถึงตาคุณทาย')}saveSession();return}
 if(message.type==='GUESS'&&isHost&&state.phase==='guess'){state.guess=Number.isInteger(message.n)?message.n:null;reveal();return}
 if(message.type==='REVEAL'&&!isHost){clearInterval(timerId);state.actual=message.actual;state.guess=Number.isInteger(message.guess)?message.guess:null;state.score=message.score;state.phase='reveal';const entry={question:questionFor()[1],answerMode:'turns',actual:message.actual,guess:message.guess,ok:!!message.ok,chooser:state.chooser};state.history[state.index]=entry;renderReveal(entry);saveSession();return}
 if(message.type==='SIM_ANSWER'&&isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'&&message.index===state.index&&['self','guess'].includes(message.field)&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4){if(!Number.isInteger(state.answers.guest[message.field])){state.answers.guest[message.field]=message.n;state.simSubmitted.guest[message.field]=true;publishSimProgress()}return}
 if(message.type==='SIM_PROGRESS'&&!isHost&&state.answerMode==='simultaneous'&&message.index===state.index){state.simSubmitted=message.submitted||state.simSubmitted;renderSimultaneous();saveSession();return}
 if(message.type==='SIM_REVEAL'&&!isHost&&message.index===state.index){state.answers=message.answers;state.simSubmitted={host:{self:true,guess:true},guest:{self:true,guess:true}};state.score=message.score;const entry={question:questionFor()[1],answerMode:'simultaneous',answers:message.answers,correct:message.correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);saveSession();return}
+if(message.type==='MINI_ACTION'&&isHost&&state.gameType==='ox'&&message.gameType==='ox'){handleTttMove('guest',Number(message.index));return}
+if(message.type==='MINI_SUBMIT'&&isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){if(message.gameType==='rps')submitMiniChoice('guest',message.choice);if(message.gameType==='cannon')submitCannonShot('guest',message.shot);if(['sync','target','split','high'].includes(message.gameType))submitBlindChoice('guest',message.choice);return}
+if(message.type==='MINI_PROGRESS'&&!isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){state.mini.submitted=message.submitted||state.mini.submitted;renderMiniGame();return}
+if(message.type==='MINI_STATE'&&!isHost&&message.state){state=message.state;if(state.phase==='finished')finish();else renderMiniGame();return}
+if(message.type==='MINI_NEXT_REQUEST'&&isHost&&state.phase==='mini'&&Number(message.round)===state.mini?.round){advanceMini();return}
 if(message.type==='NEXT_REQUEST'&&isHost){next();return}
 if(message.type==='NEXT'&&!isHost&&message.state){state=message.state;renderQuestion();return}
 if(message.type==='FINISH'&&!isHost&&message.state){state=message.state;finish();return}
-if(message.type==='REMATCH_REQUEST'&&isHost&&state.phase==='finished')startRematch()
+if(message.type==='REMATCH_REQUEST'&&isHost&&state.phase==='finished')startRematch();if(message.type==='GAME_SELECT_REQUEST'&&isHost&&state.phase!=='lobby')returnToLobby()
 }
-function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
+function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
 $('#answerMode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedAnswerMode=button.dataset.value;updateSettingControls();if(isHost&&state?.phase==='lobby')publishLobbySettings()};
 $('#themeOptions').onclick=e=>{const button=e.target.closest('[data-emoji],[data-theme]');if(!button||button.disabled)return;if(button.dataset.emoji)coupleTheme.emoji=button.dataset.emoji;if(button.dataset.theme)coupleTheme.palette=button.dataset.theme;coupleTheme=normalizeTheme(coupleTheme);applyTheme(coupleTheme);if(isHost&&state?.phase==='lobby')publishLobbySettings()};
 $('#coupleName').oninput=e=>{coupleTheme.name=e.target.value.slice(0,24);applyTheme(coupleTheme)};
@@ -242,8 +427,6 @@ $('#forgetSessionBtn').onclick=()=>{clearSavedSession();toast('ล้างห�
 window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();installPrompt=event;$('#installBtn').classList.remove('hidden')});
 window.addEventListener('appinstalled',()=>{$('#installBtn').classList.add('hidden');installPrompt=null;toast('เพิ่ม LOVE DUEL บนหน้าจอแล้ว')});
 $('#installBtn').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('#installBtn').classList.add('hidden')};
-$('#homeBtn').onclick=()=>{clearSavedSession();destroyPeer();location.reload()};
 $('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){if(isHost)reveal();else{send('GUESS',{n:state.guess});$('#revealNowBtn').disabled=true;$('#revealNowBtn').textContent='รอเฉลย…';$('#roleBanner').textContent='ส่งคำตอบแล้ว · รอเจ้าของห้องเฉลย';saveSession()}}};
-$('#playAgain').onclick=()=>{if(isHost)startRematch();else if(conn?.open){send('REMATCH_REQUEST');toast('ส่งคำขอเล่นอีกครั้งแล้ว')}else toast('กลับเข้าห้องเดิมก่อน แล้วค่อยเล่นซ้ำ')};
 applyTheme(coupleTheme);displayResume();updateLobby();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));

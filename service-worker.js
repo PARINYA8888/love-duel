@@ -1,5 +1,5 @@
-const CACHE_NAME='love-duel-shell-v3';
-const SHELL=['./','./index.html','./style.css','./app.js','./manifest.webmanifest','./icon.svg'];
+const CACHE_NAME='love-duel-shell-v5';
+const SHELL=['./','./index.html','./style.css','./question-bank.js','./app.js','./manifest.webmanifest','./icon.svg'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
 });
