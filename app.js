@@ -207,7 +207,7 @@ $('.history h3').textContent=state.gameType==='quiz'?'สรุปคำถา�
 $('#historyList').innerHTML=(state.history||[]).map(historyMarkup).join('');saveSession()
 }
 function createMiniState(type){
-const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},status:'choose',last:null};
+const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},status:'choose',last:null,syncQuestion:Math.floor(Math.random()*syncPromptBank.length)};
 if(type==='ox')return{...base,board:Array(9).fill(''),turn:'host',winner:null,status:'play'};
 if(type==='rps')return{...base,status:'choose'};
 if(type==='cannon')return{...base,target:Math.round(160+Math.random()*280),wind:Math.floor(Math.random()*13)-6,status:'aim'};
@@ -261,7 +261,7 @@ if(state.gameType==='cannon'){
   else html=scene+'<div class="cannon-controls"><label for="aimRange">มุมยิง <strong id="aimValue">'+cannonAimLocal+'°</strong></label><input id="aimRange" type="range" min="15" max="75" value="'+cannonAimLocal+'" '+(mine?'disabled':'')+'><label for="powerRange">แรงยิง <strong id="powerValue">'+cannonPowerLocal+'%</strong></label><input id="powerRange" type="range" min="35" max="85" value="'+cannonPowerLocal+'" '+(mine?'disabled':'')+'></div><button type="button" class="primary cannon-fire" data-cannon-submit '+(mine||!conn?.open?'disabled':'')+'>'+(mine?'ยิงแล้ว · รออีกคน':'ยิงปืนใหญ่')+'</button><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ เล็งแล้ว':'กำลังเล็ง')+' · '+guestName+' '+(submitted.guest?'✓ เล็งแล้ว':'กำลังเล็ง')+'</p>'
 }
 if(['sync','target','split','high'].includes(state.gameType)){
-  const choices=miniOptions(state.gameType),submitted=mini.submitted||{};
+  const choices=miniOptions(state.gameType),submitted=mini.submitted||{},syncPrompt=state.gameType==='sync'?syncPromptBank[mini.syncQuestion??0]:null;
   $('#miniBanner').textContent=mini.status==='reveal'?'เปิดผลรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกคำตอบของคุณแบบลับ';
   if(mini.status==='reveal'&&mini.last){
     const labels=Object.fromEntries(choices),a=labels[String(mini.last.host)]||mini.last.host,b=labels[String(mini.last.guest)]||mini.last.guest,points=mini.last.points||{host:0,guest:0};
@@ -269,8 +269,8 @@ if(['sync','target','split','high'].includes(state.gameType)){
     if(state.gameType==='sync')outcome=mini.last.host===mini.last.guest?'ใจตรงกัน! ได้คนละ 1 แต้ม':'คำตอบไม่เหมือนกัน รอบนี้ไม่มีคะแนน';
     else if(state.gameType==='split')outcome='รอบนี้ '+hostName+' ได้ '+points.host+' แต้ม · '+guestName+' ได้ '+points.guest+' แต้ม';
     else if(mini.last.winner)outcome=escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะรอบนี้';
-    html='<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+escapeHtml(a)+'</strong><em>+'+(points.host||0)+'</em></div><span>VS</span><div><small>'+guestName+'</small><strong>'+escapeHtml(b)+'</strong><em>+'+(points.guest||0)+'</em></div></div>'+(state.gameType==='target'?'<p class="mini-note">เลขเป้าหมายคือ '+mini.target+'</p>':'')+'<p class="mini-outcome">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
-  }else html='<div class="blind-choices '+(state.gameType==='target'||state.gameType==='high'?'number-choices':'')+'">'+choices.map(([value,label])=>'<button type="button" class="blind-choice" data-choice="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-note">'+(state.gameType==='target'?'เป้าหมายลับอยู่ระหว่าง 1–10 · เลือกเลขที่คิดว่าใกล้ที่สุด':state.gameType==='high'?'เลือกเลข 1–5 สูงกว่าได้แต้ม':'เลือกแบบลับ อีกคนจะเห็นคำตอบเมื่อส่งครบแล้ว')+'</p><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
+    html=(syncPrompt?'<p class="mini-note">' + escapeHtml(syncPrompt.question)+'</p>':'')+'<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+escapeHtml(a)+'</strong><em>+'+(points.host||0)+'</em></div><span>VS</span><div><small>'+guestName+'</small><strong>'+escapeHtml(b)+'</strong><em>+'+(points.guest||0)+'</em></div></div>'+(state.gameType==='target'?'<p class="mini-note">เลขเป้าหมายคือ '+mini.target+'</p>':'')+'<p class="mini-outcome">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
+  }else html=(syncPrompt?'<p class="mini-note">' + escapeHtml(syncPrompt.question)+'</p>':'')+'<div class="blind-choices '+(state.gameType==='target'||state.gameType==='high'?'number-choices':'')+'">'+choices.map(([value,label])=>'<button type="button" class="blind-choice" data-choice="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-note">'+(state.gameType==='target'?'เป้าหมายลับอยู่ระหว่าง 1–10 · เลือกเลขที่คิดว่าใกล้ที่สุด':state.gameType==='high'?'เลือกเลข 1–5 สูงกว่าได้แต้ม':state.gameType==='split'?'ทั้งคู่แบ่งได้คนละ 1 · เก็บเมื่ออีกคนแบ่งได้ 2 · เก็บทั้งคู่ได้ 0':'เลือกคำตอบแบบลับ')+'</p><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
 }
 $('#miniContent').innerHTML=html;saveSession()
 }
@@ -311,8 +311,18 @@ if(state.mini.submitted.host&&state.mini.submitted.guest){
 }
 publishMiniProgress()
 }
+const syncPromptBank=[
+{question:'วันหยุดด้วยกัน อยากไปไหน?',options:[['beach','🌊 ทะเล'],['mountain','🏔️ ภูเขา'],['cafe','☕ คาเฟ่'],['home','🏠 อยู่บ้าน']]},
+{question:'มื้อพิเศษวันนี้ เลือกกินอะไร?',options:[['bbq','🥓 หมูกระทะ'],['sushi','🍣 ซูชิ'],['hotpot','🍲 ชาบู'],['dessert','🍰 ของหวาน']]},
+{question:'ถ้าได้เที่ยวทันที อยากไปแบบไหน?',options:[['sea','🏝️ เกาะ'],['city','🌆 เมืองใหญ่'],['forest','🌲 ธรรมชาติ'],['roadtrip','🚗 ขับรถเที่ยว']]},
+{question:'ของขวัญแบบไหนทำให้ยิ้มที่สุด?',options:[['flowers','💐 ดอกไม้'],['food','🍪 ของกิน'],['useful','🎁 ของใช้'],['trip','✈️ ทริปเที่ยว']]},
+{question:'คืนนี้อยากใช้เวลาด้วยกันแบบไหน?',options:[['movie','🎬 ดูหนัง'],['talk','💬 คุยกัน'],['game','🎮 เล่นเกม'],['sleep','🛌 พักผ่อน']]},
+{question:'เลือกเดตวันฝนตก?',options:[['cooking','🍳 ทำอาหาร'],['series','📺 ดูซีรีส์'],['cafe','☕ คาเฟ่'],['boardgame','🧩 เล่นเกมโต๊ะ']]},
+{question:'ถ้าได้วันว่างเพิ่มหนึ่งวัน?',options:[['travel','🧳 ไปเที่ยว'],['rest','😴 นอนพัก'],['food','🍜 ตะลุยกิน'],['photos','📸 ถ่ายรูป']]},
+{question:'อยากเก็บความทรงจำแบบไหนเพิ่ม?',options:[['album','📔 อัลบั้มรูป'],['video','🎥 คลิปด้วยกัน'],['letters','💌 จดหมาย'],['trip','🗺️ ทริปใหม่']]}
+];
 function miniOptions(type){
-if(type==='sync')return[['beach','🌊 ทะเล'],['mountain','🏔️ ภูเข'],['cafe','☕ คาเฟ่'],['home','🏠 อยู่บ้าน']];
+if(type==='sync')return syncPromptBank[state.mini.syncQuestion??0].options;
 if(type==='split')return[['share','🤝 แบ่งกัน'],['keep','💎 เก็บไว้']];
 if(type==='high')return Array.from({length:5},(_,i)=>[String(i+1),String(i+1)]);
 if(type==='target')return Array.from({length:10},(_,i)=>[String(i+1),String(i+1)]);
@@ -329,14 +339,14 @@ if(state.gameType==='target'){const da=Math.abs(a-state.mini.target),db=Math.abs
 if(state.gameType==='high'){winner=a===b?null:a>b?'host':'guest';if(winner)points[winner]=1}
 if(state.gameType==='split'){if(a==='share'&&b==='share')points={host:1,guest:1};else if(a==='keep'&&b==='share')points={host:2,guest:0};else if(a==='share'&&b==='keep')points={host:0,guest:2}}
 state.score.host+=points.host;state.score.guest+=points.guest;state.mini.last={host:a,guest:b,winner,points};state.mini.status='reveal';
-const names={beach:'ทะเล',mountain:'ภูเขา',cafe:'คาเฟ่',home:'อยู่บ้าน',share:'แบ่งกัน',keep:'เก็บไว้'},label=value=>names[String(value)]||String(value);
+const labels=Object.fromEntries(miniOptions(state.gameType)),label=value=>labels[String(value)]||String(value);
 let badge=winner?state.players[winner==='host'?0:1].name+' ชนะ':points.host||points.guest?'ได้คะแนน':'เสมอ';if(state.gameType==='sync')badge=a===b?'ใจตรงกัน':'คำตอบต่างกัน';if(state.gameType==='split')badge='+'+points.host+' : +'+points.guest;
-state.history.push({kind:'mini',question:miniInfo().title+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+' · '+state.players[1].name+': '+label(b),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
+state.history.push({kind:'mini',question:miniInfo().title+(state.gameType==='sync'?' · '+syncPromptBank[state.mini.syncQuestion??0].question:'')+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+' · '+state.players[1].name+': '+label(b),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
 }
 function advanceMini(){
 if(!isHost||state.phase!=='mini'||state.mini.status!=='reveal')return;
 if(state.mini.round>=state.mini.maxRounds){finishMini();return}
-state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.status=state.gameType==='cannon'?'aim':state.gameType==='ox'?'play':'choose';state.mini.last=null;
+state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.status=state.gameType==='cannon'?'aim':state.gameType==='ox'?'play':'choose';state.mini.last=null;if(state.gameType==='sync'){const old=state.mini.syncQuestion??0;let next=Math.floor(Math.random()*(syncPromptBank.length-1));if(next>=old)next++;state.mini.syncQuestion=next}
 if(state.gameType==='ox'){state.mini.board=Array(9).fill('');state.mini.winner=null;state.mini.turn=state.mini.round%2===0?'guest':'host'}
 if(state.gameType==='cannon'){state.mini.target=Math.round(160+Math.random()*280);state.mini.wind=Math.floor(Math.random()*13)-6}
 if(state.gameType==='target')state.mini.target=Math.floor(Math.random()*10)+1;
