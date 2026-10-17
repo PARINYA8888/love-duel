@@ -48,8 +48,21 @@
     </section>
 
     <section id="lobby" class="screen">
-      <div class="section-head"><p class="eyebrow">ห้องเกม</p><h2>พร้อมหรือยัง?</h2></div>
+      <div class="section-head"><p class="eyebrow">ห้องเกม</p><h2>เลือกเกมที่จะเล่น</h2><p class="muted">เลือกเกมได้ทันทีหลังสร้างห้อง แล้วค่อยส่งรหัสให้แฟน</p></div>
       <div class="room-code"><span>รหัสห้อง</span><strong id="roomCode">----</strong><button id="copyRoom">คัดลอก</button></div>
+      <div class="card game-picker">
+        <div class="setting-heading"><div><label>เลือกเกมที่จะเล่น</label><small>เจ้าของห้องเลือกให้ทั้งคู่ · เปลี่ยนได้ก่อนเริ่ม</small></div></div>
+        <div class="game-grid" id="gameOptions" role="group" aria-label="เลือกเกม">
+          <button type="button" class="game-option selected" data-game="quiz" aria-pressed="true"><span class="game-option-icon">💞</span><span><strong>เกมคำถาม</strong><small>สุ่มจากคลัง 1,000 ข้อ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="ox" aria-pressed="false"><span class="game-option-icon">⭕</span><span><strong>เกม OX</strong><small>แข่งวางหมาก 8 กระดาน</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="rps" aria-pressed="false"><span class="game-option-icon">✊</span><span><strong>เป่ายิ้งฉุบ</strong><small>เลือกพร้อมกัน 8 รอบ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="cannon" aria-pressed="false"><span class="game-option-icon">🚀</span><span><strong>Cannon Duel</strong><small>เล็งยิงแข่งกัน 8 รอบ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="sync" aria-pressed="false"><span class="game-option-icon">🧲</span><span><strong>ใจตรงกัน</strong><small>เลือกคำตอบให้เหมือนกัน</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="target" aria-pressed="false"><span class="game-option-icon">🎯</span><span><strong>ทายเลขเป้าหมาย</strong><small>ใครเดาใกล้กว่าได้แต้ม</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="split" aria-pressed="false"><span class="game-option-icon">💎</span><span><strong>แบ่งหรือเก็บ</strong><small>ตัดสินใจพร้อมกันแบบลับ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="high" aria-pressed="false"><span class="game-option-icon">⚡</span><span><strong>ชิงเลข</strong><small>เลือกเลขสูงกว่าเพื่อชนะรอบ</small></span><span class="game-option-check">✓</span></button>
+        </div>
+      </div>
       <div class="players">
         <div class="player-slot" id="p1"><div class="avatar">1</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
         <div class="vs">VS</div>
@@ -62,19 +75,6 @@
         <div class="theme-options" id="themeOptions" role="group" aria-label="เลือกรูปแบบอีโมจิและสี">
           <div class="theme-emoji" aria-label="เลือกอีโมจิ"><button type="button" data-emoji="♥" aria-label="หัวใจ">♥</button><button type="button" data-emoji="💕" aria-label="หัวใจคู่">💕</button><button type="button" data-emoji="🐻" aria-label="หมี">🐻</button><button type="button" data-emoji="🐰" aria-label="กระต่าย">🐰</button><button type="button" data-emoji="🌙" aria-label="พระจันทร์">🌙</button><button type="button" data-emoji="☀️" aria-label="พระอาทิตย์">☀️</button></div>
           <div class="theme-colors" aria-label="เลือกสี"><button type="button" data-theme="rose" aria-label="ชมพู" class="color-rose"></button><button type="button" data-theme="violet" aria-label="ม่วง" class="color-violet"></button><button type="button" data-theme="ocean" aria-label="ฟ้า" class="color-ocean"></button><button type="button" data-theme="mint" aria-label="เขียวมิ้นต์" class="color-mint"></button></div>
-        </div>
-      </div>
-      <div class="card game-picker">
-        <div class="setting-heading"><div><label>เลือกเกมที่จะเล่น</label><small>เจ้าของห้องเลือกให้ทั้งคู่</small></div></div>
-        <div class="game-grid" id="gameOptions" role="group" aria-label="เลือกเกม">
-          <button type="button" class="game-option selected" data-game="quiz" aria-pressed="true"><span class="game-option-icon">💞</span><span><strong>เกมคำถาม</strong><small>สุ่มจากคลัง 1,000 ข้อ</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="ox" aria-pressed="false"><span class="game-option-icon">⭕</span><span><strong>เกม OX</strong><small>แข่งวางหมาก 8 กระดาน</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="rps" aria-pressed="false"><span class="game-option-icon">✊</span><span><strong>เป่ายิ้งฉุบ</strong><small>เลือกพร้อมกัน 8 รอบ</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="cannon" aria-pressed="false"><span class="game-option-icon">🚀</span><span><strong>Cannon Duel</strong><small>เล็งยิงแข่งกัน 8 รอบ</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="sync" aria-pressed="false"><span class="game-option-icon">🧲</span><span><strong>ใจตรงกัน</strong><small>เลือกคำตอบให้เหมือนกัน</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="target" aria-pressed="false"><span class="game-option-icon">🎯</span><span><strong>ทายเลขเป้าหมาย</strong><small>ใครเดาใกล้กว่าได้แต้ม</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="split" aria-pressed="false"><span class="game-option-icon">💎</span><span><strong>แบ่งหรือเก็บ</strong><small>ตัดสินใจพร้อมกันแบบลับ</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="high" aria-pressed="false"><span class="game-option-icon">⚡</span><span><strong>ชิงเลข</strong><small>เลือกเลขสูงกว่าเพื่อชนะรอบ</small></span><span class="game-option-check">✓</span></button>
         </div>
       </div>
       <div class="card settings">

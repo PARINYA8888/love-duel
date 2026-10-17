@@ -143,7 +143,7 @@ const ps=state?.players||[];
 if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||8;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';selectedGame=state.gameType||'quiz';coupleTheme=normalizeTheme(state.coupleTheme||coupleTheme)}
 [['#p1',ps[0]],['#p2',ps[1]]].forEach(([id,p])=>{const el=$(id);el.querySelector('b').textContent=p?.name||'รอผู้เล่น';el.querySelector('small').textContent=!p?.name?'ยังไม่พร้อม':p.ready?'พร้อมแล้ว':p.id==='guest'&&!conn?.open?'กำลังกลับมา…':'ยังไม่พร้อม';el.classList.toggle('ready',!!p?.ready)});
 $('#roomCode').textContent=room;const bothReady=ps.length===2&&ps.every(p=>p?.name&&p.ready);
-$('#lobbyHint').textContent=isHost?(!ps[1]?.name?'ส่งรหัสห้องให้อีกคน แล้วรอให้เข้ามา':!conn?.open?'รออีกคนกลับมาเชื่อมต่อ…':bothReady?'ทั้งคู่พร้อมแล้ว กดเริ่มเกมได้เลย':'กด “พร้อมเล่น” เมื่อพร้อม'):'รอเจ้าของห้องเริ่มเกม';
+$('#lobbyHint').textContent=isHost?(!ps[1]?.name?'เลือกเกมที่อยากเล่น แล้วส่งรหัสห้องให้แฟน':!conn?.open?'รออีกคนกลับมาเชื่อมต่อ…':bothReady?'ทั้งคู่พร้อมแล้ว กดเริ่มเกมได้เลย':'เลือกเกมให้เรียบร้อย แล้วกด “พร้อมเล่น”'):'รอเจ้าของห้องเลือกเกมและเริ่มเกม';
 const mePlayer=ps.find(p=>p?.id===myRole());$('#readyBtn').textContent=isHost&&!conn?.open?'รอผู้เล่น':isHost&&bothReady?'เริ่มเกม':'พร้อมเล่น';$('#readyBtn').disabled=isHost?(!conn||!conn.open||!!mePlayer?.ready&&!bothReady):(!conn||!conn.open||!!mePlayer?.ready);
 updateSettingControls();updateThemeControls();saveSession()
 }
