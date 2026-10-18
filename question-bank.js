@@ -84,7 +84,7 @@ const questionBankSpecs = [
 const expandedLoveQuestions = questionBankSpecs.flatMap(spec =>
   spec.topics.flatMap(topic => spec.formats.map(format => [
     spec.category,
-    format.prompt.replaceAll('{topic}', topic),
+    format.prompt.split('{topic}').join(topic),
     [...format.choices]
   ]))
 );
