@@ -89,4 +89,52 @@ function createLogicChallenge() {
   else {const step=2+Math.floor(Math.random()*12);seq=Array.from({length:5},(_,i)=>(i+1)*(i+2)/2*step);answer=21*step;id=`tri-${step}`;}
   const prompt=`เลขถัดไปคืออะไร?  ${seq.join('  ·  ')}  ·  ?`;
   const distractors=[answer+q,answer-q,answer+2*q,Math.max(0,answer-q*2),answer+Math.ceil(answer*.1)];
-  return choiceChallenge(prompt,String(answer),distractors.map(String),`logic-${id}`,'มองหารูปแบบการเพิ
+  return choiceChallenge(prompt,String(answer),distractors.map(String),`logic-${id}`,'มองหารูปแบบการเพิ่ม คูณ หรือสลับลำดับของตัวเลข');
+}
+function createWordChallenge(used=[]) {
+  const available=phraseSeeds.map((_,i)=>i).filter(i=>!used.includes(`word-${i}`));
+  const index=available[Math.floor(Math.random()*available.length)]??Math.floor(Math.random()*phraseSeeds.length);
+  const parts=phraseSeeds[index],answer=parts.join(' '),scrambled=shuffledCopy(parts);
+  if(scrambled.join(' ')===(parts.join(' ')))scrambled.reverse();
+  const wrong=[
+    [...parts].reverse(),
+    [parts[1],parts[0],parts[2],parts[3]],
+    [parts[0],parts[2],parts[1],parts[3]],
+    [parts[0],parts[1],parts[3],parts[2]]
+  ].map(order=>order.join(' ')).filter((value,index,all)=>value!==answer&&all.indexOf(value)===index);
+  return choiceChallenge(`เรียงวลีให้ตรงกับใจความ:  ${scrambled.join(' / ')}`,answer,wrong,`word-${index}`);
+}
+function createCodeChallenge() {
+  let code,clues,valid;
+  do {
+    const digits=shuffledCopy(['1','2','3','4','5','6','7','8','9','0']).slice(0,3); code=digits.join('');
+    const sum=digits.reduce((total,x)=>total+Number(x),0),tensEven=Number(digits[1])%2===0,onesEven=Number(digits[2])%2===0;
+    clues={sum,tensEven,onesEven};
+    valid=candidate=>candidate.length===3&&candidate[0]!=='0'&&new Set(candidate).size===3&&Number(candidate[0])+Number(candidate[1])+Number(candidate[2])===sum&&(Number(candidate[1])%2===0)===tensEven&&(Number(candidate[2])%2===0)===onesEven;
+  } while(!valid(code));
+  const distractors=[];
+  for(let tries=0;tries<400&&distractors.length<4;tries++){const candidate=String(Math.floor(100+Math.random()*900));if(candidate!==code&&!distractors.includes(candidate)&&!valid(candidate))distractors.push(candidate)}
+  while(distractors.length<4){const candidate=String(100+((Number(code)+distractors.length*137)%900));if(candidate!==code&&!distractors.includes(candidate)&&!valid(candidate))distractors.push(candidate)}
+  const evenLabel=n=>n?'คู่':'คี่';
+  const prompt=`รหัส 3 หลัก: ผลรวมเลขโดด = ${clues.sum} · หลักสิบเป็นเลข${evenLabel(clues.tensEven)} · หลักหน่วยเป็นเลข${evenLabel(clues.onesEven)} · ห้ามเลขซ้ำ`;
+  return choiceChallenge(prompt,code,distractors,'code-'+code,'ใช้เงื่อนไขทั้งสามข้อคัดตัวเลือก');
+}
+function createPatternChallenge() {
+  const sets=[['🔴','🔵','🟡'],['▲','●','■'],['🌑','🌓','🌕'],['♠️','♥️','♦️'],['🍋','🍇','🍒']];
+  const set=sets[Math.floor(Math.random()*sets.length)],start=Math.floor(Math.random()*set.length),step=Math.random()<.5?1:2;
+  const sequence=Array.from({length:6},(_,i)=>set[(start+i*step)%set.length]),answer=sequence.pop();
+  const distractors=shuffledCopy([...set.filter(symbol=>symbol!==answer),...new Set(sets.flat())].filter((symbol,index,all)=>symbol!==answer&&all.indexOf(symbol)===index)).slice(0,4);
+  return choiceChallenge(`จับรูปแบบแล้วเลือกตัวถัดไป:  ${sequence.join('  →  ')}  →  ?`,answer,distractors,`pattern-${set.join('')}-${start}-${step}`);
+}
+function createChallenge(type,used=[]) {
+  if(type==='math')return createMathChallenge();
+  if(type==='logic')return createLogicChallenge();
+  if(type==='word')return createWordChallenge(used);
+  if(type==='code')return createCodeChallenge();
+  if(type==='pattern')return createPatternChallenge();
+  return null;
+}
+function createUniqueChallenge(type,used=[]) {
+  for(let i=0;i<100;i++){const challenge=createChallenge(type,used);if(challenge&&!used.includes(challenge.id))return challenge;}
+  return createChallenge(type,used);
+}
