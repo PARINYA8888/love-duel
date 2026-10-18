@@ -125,7 +125,7 @@ function safeWrite(key,value){try{localStorage.setItem(key,value);return true}ca
 function safeRemove(key){try{localStorage.removeItem(key)}catch(e){}}
 function newToken(){return crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('')}
 function readSavedSession(){try{const value=JSON.parse(safeRead(sessionKey)||'null');return value&&value.room&&value.state&&Date.now()-value.savedAt<7*24*60*60*1000?value:null}catch(e){return null}}
-function displayResume(){const panel=$('#resumePanel');if(!panel)return;if(!savedSession){panel.classList.add('hidden');return}const s=savedSession.state,gameName={ox:'เกม OX',rps:'เป่ายิ้งฉุบ',sync:'ใจตรงกัน',target:'ทายเลขเป้าหมาย',split:'แบ่งหรือเก็บ',high:'เลขวงจร 5 ท่า',memory:'จับคู่ความจำ',emoji:'ถอดรหัสอีโมจิ',math:'คิดเลขเร็ว',logic:'ลำดับปริศนา',word:'เรียงวลีปริศนา',code:'ถอดรหัส 3 หลัก',pattern:'จับรูปแบบ',risk:'ประมูลแต้ม'}[s.gameType];const phase=s.phase==='lobby'?'ห้องรอเริ่ม':s.phase==='finished'?'จบเกมแล้ว':gameName||'คำถามที่ '+Math.min((s.index||0)+1,s.rounds||1);$('#resumeSummary').textContent=phase+' · ห้อง '+savedSession.room;panel.classList.remove('hidden')}
+function displayResume(){const panel=$('#resumePanel');if(!panel)return;if(!savedSession){panel.classList.add('hidden');return}const s=savedSession.state,gameName={ox:'เกม OX',rps:'เป่ายิ้งฉุบ',sync:'ใจตรงกัน',target:'ทายเลขเป้าหมาย',split:'แบ่งหรือเก็บ',high:'เลขวงจร 5 ท่า',memory:'จับคู่ความจำ',emoji:'ถอดรหัสอีโมจิ',math:'คิดเลขเร็ว',logic:'ลำดับปริศนา',word:'เรียงวลีปริศนา',code:'ถอดรหัส 3 หลัก',pattern:'จับรูปแบบ',risk:'ประมูลแต้ม',reaction:'วัดความไว'}[s.gameType];const phase=s.phase==='lobby'?'ห้องรอเริ่ม':s.phase==='finished'?'จบเกมแล้ว':gameName||'คำถามที่ '+Math.min((s.index||0)+1,s.rounds||1);$('#resumeSummary').textContent=phase+' · ห้อง '+savedSession.room;panel.classList.remove('hidden')}
 function saveSession(){if(!room||!state)return;const record={room,isHost,name:me,other,token:sessionToken,state,savedAt:Date.now()};if(safeWrite(sessionKey,JSON.stringify(record)))savedSession=record;displayResume()}
 function clearSavedSession(){safeRemove(sessionKey);savedSession=null;displayResume()}
 function send(type,payload={}){saveSession();if(conn&&conn.open)conn.send({type,...payload})}
@@ -208,6 +208,7 @@ function createMiniState(type){
 const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},answerTimes:{host:null,guest:null},status:'choose',last:null,syncQuestion:Math.floor(Math.random()*syncPromptBank.length)};
 if(type==='ox')return{...base,board:Array(9).fill(''),turn:'host',winner:null,status:'play'};
 if(type==='rps')return{...base,status:'choose'};
+if(type==='reaction')return{...base,status:'ready'};
 if(type==='target')return{...base,target:Math.floor(Math.random()*10)+1};
 if(type==='memory'){const faces=['🍓','🍋','🍇','🍒','🥝','🍊','🫐','🍉'];return{...base,status:'play',cards:shuffledValues([...faces,...faces]),revealed:[],matched:[],turn:'host'}}
 if(type==='emoji'){const emojiOrder=shuffledValues(emojiPuzzleBank.map((_,index)=>index));return{...base,emojiOrder,emojiQuestion:emojiOrder[0]}}
@@ -230,14 +231,16 @@ logic:{title:'ลำดับปริศนา',icon:'🔍',description:'หา
 word:{title:'เรียงวลีปริศนา',icon:'📝',description:'จัดคำให้เป็นวลีที่มีความหมาย · แข่งตอบพร้อมกัน'},
 code:{title:'ถอดรหัส 3 หลัก',icon:'🔐',description:'ใช้เงื่อนไขคัดรหัสลับให้เหลือคำตอบเดียว'},
 pattern:{title:'จับรูปแบบ',icon:'🔷',description:'อ่านลำดับสัญลักษณ์แล้วทายตัวถัดไป'},
-risk:{title:'ประมูลแต้ม',icon:'🎲',description:'เดิมพันเลข 1–5 · เลขสูงชนะ แต่ได้แต้มลดลง'}
+risk:{title:'ประมูลแต้ม',icon:'🎲',description:'เดิมพันเลข 1–5 · เลขสูงชนะ แต่ได้แต้มลดลง'},
+reaction:{title:'วัดความไว',icon:'⚡',description:'รอสัญญาณแล้วแตะให้เร็วที่สุด · แข่ง 8 รอบ'}
 })[state.gameType]||{title:'เกมคำถาม',icon:'💞',description:'คลังคำถามสำหรับคู่รัก'}
 }
 function updateMiniScores(){const role=myRole();$('#miniScoreMe').textContent=state.score[role]||0;$('#miniScoreOther').textContent=state.score[role==='host'?'guest':'host']||0}
-let miniTimerKey="",miniStartedAt=0;
+let miniTimerKey="",miniStartedAt=0,reactionTimerKey="",reactionTimeoutId=null,reactionVisible=false,reactionStartedAt=0;
 function renderMiniGame(){
 if(!state?.mini)return;
 if(state.gameType==='math'&&state.mini.status==='choose'){const key=state.gameType+':'+state.mini.round;if(key!==miniTimerKey){miniTimerKey=key;miniStartedAt=performance.now()}}
+if(state.gameType==='reaction'&&state.mini.status==='go'){const key=state.gameType+':'+state.mini.round;if(key!==reactionTimerKey){clearTimeout(reactionTimeoutId);reactionTimerKey=key;reactionVisible=false;reactionStartedAt=0;const round=state.mini.round;reactionTimeoutId=setTimeout(()=>{if(!state?.mini||state.gameType!=='reaction'||state.mini.status!=='go'||state.mini.round!==round)return;reactionVisible=true;reactionStartedAt=performance.now();renderMiniGame()},1400+Math.random()*2200)}}
 $('#quizPanel').classList.add('hidden');$('#miniPanel').classList.remove('hidden');
 const info=miniInfo(),mini=state.mini,role=myRole(),mine=!!mini.submitted?.[role];
 $('#miniIcon').textContent=info.icon;$('#miniTitle').textContent=info.title;$('#miniDescription').textContent=info.description;
@@ -270,7 +273,18 @@ if(state.gameType==='rps'){
   }else html='<div class="rps-choices">'+[['rock','✊','ค้อน'],['paper','✋','กระดาษ'],['scissors','✌️','กรรไกร']].map(([value,icon,label])=>'<button type="button" class="rps-choice" data-rps="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><span>'+icon+'</span><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
 }
 
-if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk'].includes(state.gameType)){
+if(state.gameType==='reaction'&&mini.status!=='reveal'){
+  const submitted=mini.submitted||{};
+  if(mini.status==='ready'){
+    $('#miniBanner').textContent=mine?'พร้อมแล้ว · รออีกคน':'ทั้งคู่กดพร้อม แล้วรอสัญญาณ';
+    html='<div class="reaction-stage"><div><p class="reaction-message">กดพร้อมเมื่อทั้งคู่ตั้งท่าแล้ว · รอบนี้ห้ามแตะก่อนสัญญาณสีเขียว</p><button type="button" class="reaction-pad ready" data-choice="ready" '+(mine||!conn?.open?'disabled':'')+'>'+(mine?'✓ พร้อมแล้ว':'ฉันพร้อม')+'</button></div><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ พร้อม':'กำลังเตรียม')+' · '+guestName+' '+(submitted.guest?'✓ พร้อม':'กำลังเตรียม')+'</p></div>';
+  }else{
+    $('#miniBanner').textContent=mine?'แตะแล้ว · รออีกคน':'ตั้งใจดูหน้าจอ แล้วแตะทันทีเมื่อขึ้นสีเขียว';
+    html='<div class="reaction-stage"><div><p class="reaction-message">'+(reactionVisible?'แตะเลย!':'รอสัญญาณ...')+'</p><button type="button" class="reaction-pad '+(reactionVisible?'go':'')+'" data-choice="tap" '+(!reactionVisible||mine||!conn?.open?'disabled':'')+'>'+(reactionVisible?'แตะเลย!':'รอไฟเขียว')+'</button></div><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ แตะแล้ว':'กำลังรอ')+' · '+guestName+' '+(submitted.guest?'✓ แตะแล้ว':'กำลังรอ')+'</p></div>';
+  }
+}
+
+if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType)&&(state.gameType!=='reaction'||mini.status==='reveal')){
   const choices=miniOptions(state.gameType),submitted=mini.submitted||{},syncPrompt=state.gameType==='sync'?syncPromptBank[mini.syncQuestion??0]:null,emojiPuzzle=state.gameType==='emoji'?emojiPuzzleBank[mini.emojiQuestion??0]:null,challenge=mini.challenge||null;
   $('#miniBanner').textContent=mini.status==='reveal'?'เปิดผลรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกคำตอบของคุณแบบลับ';
   if(mini.status==='reveal'&&mini.last){
@@ -280,10 +294,11 @@ if(['sync','target','split','high','emoji','math','logic','word','code','pattern
     else if(state.gameType==='split')outcome=a==='🤝 แบ่งกัน'&&b==='🤝 แบ่งกัน'?'แบ่งกันคนละ 1 แต้ม':a==='💎 เก็บไว้'&&b==='💎 เก็บไว้'?'ทั้งคู่เก็บไว้ · ไม่มีใครได้แต้ม':(a==='💎 เก็บไว้'?hostName:guestName)+' เก็บได้ 2 แต้ม · '+(a==='🤝 แบ่งกัน'?hostName:guestName)+' ได้ 0 แต้ม';
     else if(state.gameType==='emoji'||['math','logic','word','code','pattern'].includes(state.gameType))outcome=points.host&&points.guest?'ถูกทั้งคู่ · ได้คนละ 1 แต้ม':points.host?hostName+' ตอบถูก · ได้ 1 แต้ม':points.guest?guestName+' ตอบถูก · ได้ 1 แต้ม':'รอบนี้ยังไม่มีใครตอบถูก';
     else if(state.gameType==='risk')outcome=mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะการประมูล · ได้ '+points[mini.last.winner]+' แต้ม':a===b?'เดิมพันเลขซ้ำ · ไม่มีใครได้แต้ม':'ไม่มีผู้ชนะ';
+    else if(state.gameType==='reaction')outcome=mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ไวกว่า · ได้ 1 แต้ม':'แตะพร้อมกันมาก · เสมอกันรอบนี้';
     else if(mini.last.winner)outcome=escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะรอบนี้';
     const promptHtml=syncPrompt?'<p class="mini-note">'+escapeHtml(syncPrompt.question)+'</p>':emojiPuzzle?'<div class="emoji-riddle">'+escapeHtml(emojiPuzzle.clue)+'</div>':challenge?'<p class="challenge-prompt">'+escapeHtml(challenge.prompt)+'</p>':'';
     if(state.gameType==='math')outcome=points.host&&points.guest?'ตอบถูกใกล้เคียงกัน · คนละ 1 แต้ม':mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ตอบถูกเร็วกว่า · ได้ 1 แต้ม':'ไม่มีใครตอบถูก';
-    const hostElapsed=mini.answerTimes?.host,guestElapsed=mini.answerTimes?.guest,hostPoints='+'+(points.host||0)+(state.gameType==='math'&&Number.isFinite(hostElapsed)?' · '+(hostElapsed/1000).toFixed(1)+' วิ':''),guestPoints='+'+(points.guest||0)+(state.gameType==='math'&&Number.isFinite(guestElapsed)?' · '+(guestElapsed/1000).toFixed(1)+' วิ':'');
+    const hostElapsed=mini.answerTimes?.host,guestElapsed=mini.answerTimes?.guest,hostPoints='+'+(points.host||0)+(['math','reaction'].includes(state.gameType)&&Number.isFinite(hostElapsed)?' · '+(hostElapsed/1000).toFixed(2)+' วิ':''),guestPoints='+'+(points.guest||0)+(['math','reaction'].includes(state.gameType)&&Number.isFinite(guestElapsed)?' · '+(guestElapsed/1000).toFixed(2)+' วิ':'');
     const answerHtml=emojiPuzzle?'<p class="mini-note">คำตอบ: '+escapeHtml(mini.last.answer)+'<br>'+escapeHtml(mini.last.hint)+'</p>':challenge?'<p class="mini-note">เฉลย: '+escapeHtml(challenge.options[challenge.answer])+(challenge.explanation?' · '+escapeHtml(challenge.explanation):'')+'</p>':'';
     html=promptHtml+'<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+escapeHtml(String(a))+'</strong><em>'+hostPoints+'</em></div><span>VS</span><div><small>'+guestName+'</small><strong>'+escapeHtml(String(b))+'</strong><em>'+guestPoints+'</em></div></div>'+(state.gameType==='target'?'<p class="mini-note">เลขเป้าหมายคือ '+mini.target+'</p>':'')+answerHtml+'<p class="mini-outcome">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>';
   }else{
@@ -360,6 +375,7 @@ const syncPromptBank=[
 ];
 function miniOptions(type){
 if(type==='sync')return syncPromptBank[state.mini.syncQuestion??0].options;
+if(type==='reaction')return state.mini.status==='ready'?[['ready','พร้อม']]:[['tap','แตะ']];
 if(type==='emoji')return emojiPuzzleBank[state.mini.emojiQuestion??0].options.map((label,index)=>[String(index),label]);
 if(type==='split')return[['share','🤝 แบ่งกัน'],['keep','💎 เก็บไว้']];
 if(type==='high'||type==='risk')return Array.from({length:5},(_,i)=>[String(i+1),type==='risk'?(i+1)+' แต้ม':String(i+1)]);
@@ -368,9 +384,15 @@ if(['math','logic','word','code','pattern'].includes(type))return(state.mini.cha
 return[]
 }
 function submitBlindChoice(role,choice,timeMs=0){
-if(!isHost||!['sync','target','split','high','emoji','math','logic','word','code','pattern','risk'].includes(state.gameType)||state.phase!=='mini'||state.mini.status!=='choose'||state.mini.submitted[role])return;
+const reaction=state.gameType==='reaction';
+if(!isHost||!['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType)||state.phase!=='mini'||(reaction?!['ready','go'].includes(state.mini.status):state.mini.status!=='choose')||state.mini.submitted[role])return;
 const allowed=miniOptions(state.gameType).map(([value])=>String(value));if(!allowed.includes(String(choice)))return;
-choice=['sync','split'].includes(state.gameType)?String(choice):Number(choice);state.mini.submissions[role]=choice;state.mini.submitted[role]=true;if(state.gameType==='math'){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes[role]=Math.max(0,Number(timeMs)||0)}
+choice=['sync','split','reaction'].includes(state.gameType)?String(choice):Number(choice);state.mini.submissions[role]=choice;state.mini.submitted[role]=true;if(state.gameType==='math'||(reaction&&choice==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes[role]=Math.max(0,Number(timeMs)||0)}
+if(reaction&&state.mini.status==='ready'){
+  if(state.mini.submitted.host&&state.mini.submitted.guest){state.mini.status='go';state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.answerTimes={host:null,guest:null};miniStateChanged()}
+  else publishMiniProgress();
+  return
+}
 if(!state.mini.submitted.host||!state.mini.submitted.guest){publishMiniProgress();return}
 const a=state.mini.submissions.host,b=state.mini.submissions.guest;let winner=null,points={host:0,guest:0};
 if(state.gameType==='sync'){if(a===b)points={host:1,guest:1}}
@@ -380,16 +402,17 @@ if(state.gameType==='math'){const correct=state.mini.challenge.answer,hostCorrec
 if(['logic','word','code','pattern'].includes(state.gameType)){const correct=state.mini.challenge.answer;points={host:Number(a===correct),guest:Number(b===correct)}}
 if(state.gameType==='high'){const difference=(a-b+5)%5;if(difference===1||difference===2){winner='host';points.host=1}else if(difference===3||difference===4){winner='guest';points.guest=1}}
 if(state.gameType==='risk'&&a!==b){winner=a>b?'host':'guest';points[winner]=6-Math.max(a,b)}
+if(reaction){const times=state.mini.answerTimes||{};winner=Math.abs(times.host-times.guest)<=25?null:times.host<times.guest?'host':'guest';if(winner)points[winner]=1}
 if(state.gameType==='split'){if(a==='share'&&b==='share')points={host:1,guest:1};else if(a==='keep'&&b==='share')points={host:2,guest:0};else if(a==='share'&&b==='keep')points={host:0,guest:2}}
 state.score.host+=points.host;state.score.guest+=points.guest;state.mini.last={host:a,guest:b,winner,points,...(state.gameType==='emoji'?{answer:emojiPuzzleBank[state.mini.emojiQuestion].options[emojiPuzzleBank[state.mini.emojiQuestion].answerIndex],hint:emojiPuzzleBank[state.mini.emojiQuestion].hint}:{})};state.mini.status='reveal';
 const labels=Object.fromEntries(miniOptions(state.gameType)),label=value=>labels[String(value)]||String(value);
 let badge=winner?state.players[winner==='host'?0:1].name+' ชนะ':points.host||points.guest?'ได้คะแนน':'เสมอ';if(state.gameType==='sync')badge=a===b?'ใจตรงกัน':'คำตอบต่างกัน';if(state.gameType==='split')badge='+'+points.host+' : +'+points.guest;if(state.gameType==='emoji'||['math','logic','word','code','pattern'].includes(state.gameType))badge=points.host&&points.guest?'ถูกทั้งคู่':points.host?state.players[0].name+' ตอบถูก':points.guest?state.players[1].name+' ตอบถูก':'ยังไม่มีใครตอบถูก';if(state.gameType==='math'&&winner)badge=state.players[winner==='host'?0:1].name+' ตอบถูกเร็วกว่า';if(state.gameType==='risk')badge=winner?state.players[winner==='host'?0:1].name+' ได้ '+points[winner]+' แต้ม':a===b?'เดิมพันซ้ำ':'ไม่มีผู้ชนะ';
-state.history.push({kind:'mini',question:miniInfo().title+(state.gameType==='sync'?' · '+syncPromptBank[state.mini.syncQuestion??0].question:state.gameType==='emoji'?' · '+emojiPuzzleBank[state.mini.emojiQuestion??0].clue:state.mini.challenge?' · '+state.mini.challenge.prompt:'')+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+' · '+state.players[1].name+': '+label(b),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
+const reactionTimes=state.mini.answerTimes||{};state.history.push({kind:'mini',question:miniInfo().title+(state.gameType==='sync'?' · '+syncPromptBank[state.mini.syncQuestion??0].question:state.gameType==='emoji'?' · '+emojiPuzzleBank[state.mini.emojiQuestion??0].clue:state.mini.challenge?' · '+state.mini.challenge.prompt:'')+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+(reaction&&Number.isFinite(reactionTimes.host)?' ('+(reactionTimes.host/1000).toFixed(2)+' วิ)':'')+' · '+state.players[1].name+': '+label(b)+(reaction&&Number.isFinite(reactionTimes.guest)?' ('+(reactionTimes.guest/1000).toFixed(2)+' วิ)':''),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
 }
 function advanceMini(){
 if(!isHost||state.phase!=='mini'||state.mini.status!=='reveal')return;
 if(state.mini.round>=state.mini.maxRounds){finishMini();return}
-state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.answerTimes={host:null,guest:null};state.mini.status=state.gameType==='ox'?'play':'choose';state.mini.last=null;if(state.gameType==='sync'){const old=state.mini.syncQuestion??0;let next=Math.floor(Math.random()*(syncPromptBank.length-1));if(next>=old)next++;state.mini.syncQuestion=next}
+state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.answerTimes={host:null,guest:null};state.mini.status=state.gameType==='ox'?'play':state.gameType==='reaction'?'ready':'choose';state.mini.last=null;if(state.gameType==='sync'){const old=state.mini.syncQuestion??0;let next=Math.floor(Math.random()*(syncPromptBank.length-1));if(next>=old)next++;state.mini.syncQuestion=next}
 if(state.gameType==='emoji')state.mini.emojiQuestion=state.mini.emojiOrder[state.mini.round-1];
 if(state.gameType==='ox'){state.mini.board=Array(9).fill('');state.mini.winner=null;state.mini.turn=state.mini.round%2===0?'guest':'host'}
 if(state.gameType==='target')state.mini.target=Math.floor(Math.random()*10)+1;
@@ -402,12 +425,12 @@ if(memory){const index=Number(memory.dataset.memory);if(isHost)handleMemoryFlip(
 if(memoryPass){if(isHost)handleMemoryPass('host');else send('MINI_ACTION',{gameType:'memory',action:'pass'});return}
 if(ttt){const index=Number(ttt.dataset.ttt);if(isHost)handleTttMove('host',index);else send('MINI_ACTION',{gameType:'ox',index});return}
 if(rps){const value=rps.dataset.rps;if(isHost)submitMiniChoice('host',value);else{if(state.mini.status!=='choose'||state.mini.submitted.guest)return;state.mini.submissions.guest=value;state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:value});renderMiniGame()}return}
-if(choice){const value=choice.dataset.choice,timeMs=state.gameType==='math'?Math.max(0,Math.round(performance.now()-miniStartedAt)):0;if(isHost)submitBlindChoice('host',value,timeMs);else{if(state.mini.status!=='choose'||state.mini.submitted.guest)return;state.mini.submissions.guest=['sync','split'].includes(state.gameType)?value:Number(value);state.mini.submitted.guest=true;if(state.gameType==='math'){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes.guest=timeMs}send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:value,timeMs});renderMiniGame()}return}
+if(choice){const value=choice.dataset.choice,timeMs=state.gameType==='math'?Math.max(0,Math.round(performance.now()-miniStartedAt)):state.gameType==='reaction'&&value==='tap'?Math.max(0,Math.round(performance.now()-reactionStartedAt)):0;if(isHost)submitBlindChoice('host',value,timeMs);else{const canSubmit=state.gameType==='reaction'?(value==='ready'?state.mini.status==='ready':state.mini.status==='go'&&reactionVisible):state.mini.status==='choose';if(!canSubmit||state.mini.submitted.guest)return;state.mini.submissions.guest=['sync','split','reaction'].includes(state.gameType)?value:Number(value);state.mini.submitted.guest=true;if(state.gameType==='math'||(state.gameType==='reaction'&&value==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes.guest=timeMs}send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:value,timeMs});renderMiniGame()}return}
 
 if(event.target.closest('[data-mini-next]')){if(isHost)advanceMini();else send('MINI_NEXT_REQUEST',{round:state.mini.round})}
 });
 
-function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;miniTimerKey='';state.index=0;state.score={host:0,guest:0};state.history=[];if(state.gameType==='quiz'){state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion()}else{state.phase='mini';state.mini=createMiniState(state.gameType);show('game');renderMiniGame()}send('START',{state:guestSnapshot()})}
+function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;miniTimerKey='';reactionTimerKey='';clearTimeout(reactionTimeoutId);reactionVisible=false;state.index=0;state.score={host:0,guest:0};state.history=[];if(state.gameType==='quiz'){state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion()}else{state.phase='mini';state.mini=createMiniState(state.gameType);show('game');renderMiniGame()}send('START',{state:guestSnapshot()})}
 function next(){if(state.phase!=='reveal')return;if(!isHost){send('NEXT_REQUEST');return}if(state.index+1>=state.rounds){state.phase='finished';send('FINISH',{state});finish();return}state.index++;state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';renderQuestion();send('NEXT',{state})}
 function startRematch(){
 if(!isHost||!state?.players?.[1]?.name||!conn?.open)return toast('อีกคนหลุดจากห้อง จึงเริ่มเกมใหม่ไม่ได้');
@@ -448,7 +471,7 @@ if(state.answerMode==='simultaneous'&&state.phase!=='reveal'&&state.phase!=='fin
 state.answers=blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();
 if(localAnswers){state.answers.guest={self:localAnswers.self??null,guess:localAnswers.guess??null};for(const field of ['self','guess'])if(Number.isInteger(localAnswers[field])){state.simSubmitted.guest[field]=true;if(!snapshot.simSubmitted?.guest?.[field])send('SIM_ANSWER',{index:state.index,field,n:localAnswers[field]})}}
 }else if(state.phase==='guess'&&!Number.isInteger(state.guess)&&Number.isInteger(localGuess))state.guess=localGuess;
-if(!isHost&&state.phase==='mini'&&localMiniSecret!==null&&localMiniSecret!==undefined&&state.mini?.status!=='reveal'){state.mini.submissions.guest=localMiniSecret;state.mini.submitted.guest=true;if(state.gameType==='rps')send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:localMiniSecret});if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk'].includes(state.gameType))send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:localMiniSecret,timeMs:localMiniTime})}
+if(!isHost&&state.phase==='mini'&&localMiniSecret!==null&&localMiniSecret!==undefined&&state.mini?.status!=='reveal'){state.mini.submissions.guest=localMiniSecret;state.mini.submitted.guest=true;if(state.gameType==='rps')send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:localMiniSecret});if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType))send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:localMiniSecret,timeMs:localMiniTime})}
 other=state.players?.[0]?.name||other;resumePending=false;if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}restoreSavedView();saveSession()
 }
 function handle(message){
@@ -467,7 +490,7 @@ if(message.type==='SIM_PROGRESS'&&!isHost&&state.answerMode==='simultaneous'&&me
 if(message.type==='SIM_REVEAL'&&!isHost&&message.index===state.index){state.answers=message.answers;state.simSubmitted={host:{self:true,guess:true},guest:{self:true,guess:true}};state.score=message.score;const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'simultaneous',answers:message.answers,correct:message.correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);saveSession();return}
 if(message.type==='MINI_ACTION'&&isHost&&state.gameType==='ox'&&message.gameType==='ox'){handleTttMove('guest',Number(message.index));return}
 if(message.type==='MINI_ACTION'&&isHost&&state.gameType==='memory'&&message.gameType==='memory'){if(message.action==='pass')handleMemoryPass('guest');else handleMemoryFlip('guest',Number(message.index));return}
-if(message.type==='MINI_SUBMIT'&&isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){if(message.gameType==='rps')submitMiniChoice('guest',message.choice);if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk'].includes(message.gameType))submitBlindChoice('guest',message.choice,message.timeMs);return}
+if(message.type==='MINI_SUBMIT'&&isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){if(message.gameType==='rps')submitMiniChoice('guest',message.choice);if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(message.gameType))submitBlindChoice('guest',message.choice,message.timeMs);return}
 if(message.type==='MINI_PROGRESS'&&!isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){state.mini.submitted=message.submitted||state.mini.submitted;renderMiniGame();return}
 if(message.type==='MINI_STATE'&&!isHost&&message.state){state=message.state;if(state.phase==='finished')finish();else renderMiniGame();return}
 if(message.type==='MINI_NEXT_REQUEST'&&isHost&&state.phase==='mini'&&Number(message.round)===state.mini?.round){advanceMini();return}
@@ -486,3 +509,4 @@ $('#installBtn').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt
 $('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){if(isHost)reveal();else{send('GUESS',{n:state.guess});$('#revealNowBtn').disabled=true;$('#revealNowBtn').textContent='รอเฉลย…';$('#roleBanner').textContent='ส่งคำตอบแล้ว · รอเจ้าของห้องเฉลย';saveSession()}}};
 displayResume();updateLobby();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+
