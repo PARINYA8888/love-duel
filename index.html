@@ -35,6 +35,11 @@
         <button class="primary" id="resumeBtn">กลับเข้าห้องเดิม</button>
         <button class="link-btn" id="forgetSessionBtn">ล้างห้องที่จำไว้</button>
       </div>
+      <div class="card recent-card hidden" id="recentPanel" aria-live="polite">
+        <div class="recent-heading"><b>จำเกมที่เราเล่นไว้แล้ว</b><small>สุ่มคำถามใหม่ ไม่วนข้อเดิมง่าย ๆ</small></div>
+        <p id="recentGames"></p>
+        <div id="recentQuestions" class="recent-question-list"></div>
+      </div>
       <button type="button" class="secondary install-button hidden" id="installBtn">ติดตั้ง LOVE DUEL บนหน้าจอ</button>
       <div class="card form-card">
         <label for="name">ชื่อของคุณ</label>
@@ -61,7 +66,8 @@
           <button type="button" class="game-option" data-game="split" aria-pressed="false"><span class="game-option-icon">💎</span><span><strong>แบ่งหรือเก็บ</strong><small>แบ่ง 1 แต้ม · เก็บได้ 2 เมื่ออีกคนแบ่ง</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="high" aria-pressed="false"><span class="game-option-icon">⚡</span><span><strong>เลขวงจร 5 ท่า</strong><small>แต่ละเลขชนะ 2 และแพ้ 2 เลข</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="memory" aria-pressed="false"><span class="game-option-icon">🃏</span><span><strong>จับคู่ความจำ</strong><small>ผลัดกันพลิกไพ่หาคู่ 8 คู่</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="emoji" aria-pressed="false"><span class="game-option-icon">🧩</span><span><strong>ถอดรหัสอีโมจิ</strong><small>ปริศนาสำนวนไทย 500 ข้อ สุ่มไม่ซ้ำ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="emoji" aria-pressed="false"><span class="game-option-icon">🧩</span><span><strong>ถอดรหัสอีโมจิ</strong><small>5 ตัวเลือกเป็นสำนวนใกล้เคียงกัน</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="taboo" aria-pressed="false"><span class="game-option-icon">🤫</span><span><strong>คำต้องห้าม</strong><small>ใบ้คำให้แฟนทาย ห้ามพูดคำที่กำหนด</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="math" aria-pressed="false"><span class="game-option-icon">🧠</span><span><strong>คิดเลขเร็ว</strong><small>บวก ลบ คูณ หาร · 5 ตัวเลือก</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="logic" aria-pressed="false"><span class="game-option-icon">🔍</span><span><strong>ลำดับปริศนา</strong><small>แกะแพตเทิร์นตัวเลขระดับยาก</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="word" aria-pressed="false"><span class="game-option-icon">📝</span><span><strong>เรียงวลีปริศนา</strong><small>สลับคำแล้วเรียงให้ได้ใจความ</small></span><span class="game-option-check">✓</span></button>
