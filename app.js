@@ -299,10 +299,10 @@ function handleMiniTimeout(){
  const timeoutRole=mini.submitted.host?'guest':'host';
  if(state.gameType==='rps'){
    mini.submissions=mini.submissions||{host:null,guest:null};mini.submitted=mini.submitted||{host:false,guest:false};
-   if(!mini.submitted[timeoutRole]){mini.submissions[timeoutRole]=TIMEOUT_CHOICE;mini.submitted[timeoutRole]=true}
+   for(const role of ['host','guest'])if(!mini.submitted[role]){mini.submissions[role]=TIMEOUT_CHOICE;mini.submitted[role]=true}
    if(mini.submitted.host&&mini.submitted.guest){const a=mini.submissions.host,b=mini.submissions.guest,winner=a===TIMEOUT_CHOICE&&b===TIMEOUT_CHOICE?null:a===TIMEOUT_CHOICE?'guest':b===TIMEOUT_CHOICE?'host':null;if(winner)state.score[winner]++;mini.last={host:a,guest:b,winner};mini.status='reveal';state.history.push({kind:'mini',question:'เป่ายิ้งฉุบ · รอบ '+mini.round,detail:state.players[0].name+': '+(a===TIMEOUT_CHOICE?'หมดเวลา':a)+' · '+state.players[1].name+': '+(b===TIMEOUT_CHOICE?'หมดเวลา':b),badge:winner?state.players[winner==='host'?0:1].name+' ชนะเพราะอีกคนหมดเวลา':'หมดเวลาทั้งคู่',ok:!!winner});miniStateChanged()}else publishMiniProgress();return
  }
- submitBlindChoice(timeoutRole,TIMEOUT_CHOICE)
+ for(const role of ['host','guest'])if(!mini.submitted[role])submitBlindChoice(role,TIMEOUT_CHOICE)
 }
 const TIMEOUT_CHOICE='__timeout__';
 function renderMiniGame(){
