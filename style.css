@@ -214,7 +214,20 @@ button:focus-visible,input:focus-visible{outline:2px solid #ff9cab;outline-offse
 .math-difficulty>small{display:block;margin-top:8px;color:var(--muted);font-size:10px;line-height:1.4}
 .game-option[data-game="odd"],.game-option[data-game="detective"]{--game-accent:#f2a2c8}
 .game-option[data-game="algebra"],.game-option[data-game="probability"]{--game-accent:#81d7ec}
-.emoji-answer-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:12px}
+.game-option[data-game="taboo"]{--game-accent:#ffb979}
+.recent-card{margin:0 0 12px;padding:14px 16px}
+.recent-heading b,.recent-heading small{display:block}
+.recent-heading small,#recentGames,#recentQuestions>small{color:var(--muted);font-size:11px;line-height:1.5}
+#recentGames{margin:8px 0 0}
+.recent-question-list{display:grid;gap:6px;margin-top:7px}
+.recent-question-item{margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:11px;background:#0d1016;color:#d7dce5;font-size:11px;line-height:1.5}
+.taboo-card{margin:12px 0;padding:18px 14px;border:1px solid #6b4654;border-radius:18px;background:linear-gradient(150deg,#261820,#12151c 78%);text-align:center}
+.taboo-card>small{display:block;color:var(--muted);font-size:11px}
+.taboo-card>strong{display:block;margin:7px 0 18px;color:#ffe6ed;font-size:clamp(26px,8vw,36px);line-height:1.25}
+.taboo-card>p{margin:0 0 9px;color:#ffb8c8;font-size:12px;font-weight:700}
+.taboo-forbidden{display:flex;flex-wrap:wrap;justify-content:center;gap:7px}
+.taboo-forbidden span{padding:7px 11px;border:1px solid #995366;border-radius:99px;background:#351b25;color:#ffd8e0;font-size:13px;font-weight:600}
+.taboo-instruction{margin-top:17px!important;color:var(--muted)!important;font-weight:400!important}
 .emoji-answer-form input{min-width:0;height:52px;padding:0 13px;border:1px solid var(--line);border-radius:13px;background:#0b0e14;color:var(--text);font-size:15px;outline:none}
 .emoji-answer-form input:focus{border-color:var(--accent)}
 .emoji-answer-form input::placeholder{color:#727b8b}
