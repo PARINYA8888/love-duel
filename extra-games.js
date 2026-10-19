@@ -67,17 +67,37 @@ function choiceChallenge(prompt,answer,distractors,id,explanation='') {
   const options=shuffledCopy(pool.slice(0,5));
   return {id,prompt,options,answer:options.indexOf(answer),explanation};
 }
-function createMathChallenge() {
-  const kind=Math.floor(Math.random()*5); let a,b,c,d,answer,prompt;
-  if(kind===0){a=11+Math.floor(Math.random()*39);b=7+Math.floor(Math.random()*29);c=2+Math.floor(Math.random()*9);answer=a+b*c;prompt=`${a} + ${b} × ${c} = ?`;}
-  else if(kind===1){a=8+Math.floor(Math.random()*31);b=6+Math.floor(Math.random()*24);c=2+Math.floor(Math.random()*8);answer=(a+b)*c;prompt=`(${a} + ${b}) × ${c} = ?`;}
-  else if(kind===2){b=3+Math.floor(Math.random()*9);answer=3+Math.floor(Math.random()*17);a=b*answer;c=2+Math.floor(Math.random()*25);answer+=c;prompt=`${a} ÷ ${b} + ${c} = ?`;}
-  else if(kind===3){a=12+Math.floor(Math.random()*28);b=3+Math.floor(Math.random()*12);c=2+Math.floor(Math.random()*15);d=2+Math.floor(Math.random()*9);answer=a*b-c*d;prompt=`${a} × ${b} − ${c} × ${d} = ?`;}
-  else {a=20+Math.floor(Math.random()*70);b=5+Math.floor(Math.random()*40);c=3+Math.floor(Math.random()*35);answer=a-b+c;prompt=`${a} − ${b} + ${c} = ?`;}
-  const distractors=[answer+1,answer-1,answer+(2+Math.floor(Math.random()*5)),answer-(2+Math.floor(Math.random()*5)),kind===0?a+b+c:kind===1?a+b+c:kind===2?a/b+c:kind===3?a*b-c*d: a+b+c];
+function createMathChallenge(difficulty='medium') {
+  let kind,a,b,c,d,answer,prompt;
+  const rand=(min,max)=>min+Math.floor(Math.random()*(max-min+1));
+  if(difficulty==='easy'){
+    kind=rand(0,3);
+    if(kind===0){a=rand(12,49);b=rand(11,39);answer=a+b;prompt=`${a} + ${b} = ?`;}
+    else if(kind===1){a=rand(30,89);b=rand(10,a-1);answer=a-b;prompt=`${a} − ${b} = ?`;}
+    else if(kind===2){a=rand(3,12);b=rand(3,12);answer=a*b;prompt=`${a} × ${b} = ?`;}
+    else {b=rand(3,12);answer=rand(3,12);a=b*answer;prompt=`${a} ÷ ${b} = ?`;}
+  }else if(difficulty==='hard'||difficulty==='pro'){
+    kind=rand(0,5);
+    if(kind===0){a=rand(12,45);b=rand(11,39);c=rand(3,12);answer=a+b*c;prompt=`${a} + ${b} × ${c} = ?`;}
+    else if(kind===1){a=rand(12,35);b=rand(8,29);c=rand(3,12);answer=(a+b)*c;prompt=`(${a} + ${b}) × ${c} = ?`;}
+    else if(kind===2){b=rand(4,14);answer=rand(8,28);a=b*answer;c=rand(10,70);answer=a/b+c;prompt=`${a} ÷ ${b} + ${c} = ?`;}
+    else if(kind===3){a=rand(14,45);b=rand(5,18);c=rand(4,24);d=rand(3,15);answer=a*b-c*d;prompt=`${a} × ${b} − ${c} × ${d} = ?`;}
+    else if(kind===4){a=rand(18,90);b=rand(7,58);c=rand(5,44);answer=(a-b)*c;prompt=`(${a} − ${b}) × ${c} = ?`;}
+    else {a=rand(2,12);b=rand(2,12);c=rand(2,12);d=rand(2,9);answer=a*b+c*d;prompt=`${a} × ${b} + ${c} × ${d} = ?`;}
+    if(difficulty==='pro'&&Math.random()<.45){const x=rand(3,18),den=rand(2,9),k=rand(4,18);a=x*den;answer=x*k;prompt=`(${a} ÷ ${den}) × ${k} = ?`;}
+    if(difficulty==='pro'&&Math.random()<.35){a=rand(12,45);b=rand(8,31);c=rand(2,9);answer=(a+b)/c; if(!Number.isInteger(answer)){b+=c-((a+b)%c);answer=(a+b)/c;}prompt=`(${a} + ${b}) ÷ ${c} = ?`;}
+  }else{
+    kind=rand(0,4);
+    if(kind===0){a=rand(11,49);b=rand(7,29);c=rand(2,9);answer=a+b*c;prompt=`${a} + ${b} × ${c} = ?`;}
+    else if(kind===1){a=rand(8,31);b=rand(6,24);c=rand(2,8);answer=(a+b)*c;prompt=`(${a} + ${b}) × ${c} = ?`;}
+    else if(kind===2){b=rand(3,11);answer=rand(3,19);a=b*answer;c=rand(2,25);answer+=c;prompt=`${a} ÷ ${b} + ${c} = ?`;}
+    else if(kind===3){a=rand(12,39);b=rand(3,12);c=rand(2,15);d=rand(2,9);answer=a*b-c*d;prompt=`${a} × ${b} − ${c} × ${d} = ?`;}
+    else {a=rand(20,89);b=rand(5,39);c=rand(3,34);answer=a-b+c;prompt=`${a} − ${b} + ${c} = ?`;}
+  }
+  const distractors=[answer+1,answer-1,answer+rand(2,9),answer-rand(2,9),answer+(kind%2?13:-13)];
   let unique=[...new Set(distractors.map(x=>Math.round(x)))].filter(x=>x!==answer);
-  while(unique.length<4)unique.push(answer+unique.length+7);
-  return choiceChallenge(prompt,String(answer),unique.slice(0,4).map(String),'math-'+kind+'-'+a+'-'+b+'-'+c+'-'+d);
+  while(unique.length<4)unique.push(answer+unique.length+17);
+  return choiceChallenge(prompt,String(answer),unique.slice(0,4).map(String),`math-${difficulty}-${prompt}`);
 }
 function createLogicChallenge() {
   const family=Math.floor(Math.random()*6),p=2+Math.floor(Math.random()*12),q=2+Math.floor(Math.random()*8); let seq=[],answer,id;
@@ -107,17 +127,44 @@ function createWordChallenge(used=[]) {
 function createCodeChallenge() {
   let code,clues,valid;
   do {
-    const digits=shuffledCopy(['1','2','3','4','5','6','7','8','9','0']).slice(0,3); code=digits.join('');
-    const sum=digits.reduce((total,x)=>total+Number(x),0),tensEven=Number(digits[1])%2===0,onesEven=Number(digits[2])%2===0;
-    clues={sum,tensEven,onesEven};
-    valid=candidate=>candidate.length===3&&candidate[0]!=='0'&&new Set(candidate).size===3&&Number(candidate[0])+Number(candidate[1])+Number(candidate[2])===sum&&(Number(candidate[1])%2===0)===tensEven&&(Number(candidate[2])%2===0)===onesEven;
-  } while(!valid(code));
+    const digits=shuffledCopy(['1','2','3','4','5','6','7','8','9','0']).slice(0,4);code=digits.join('');
+    const sum=digits.reduce((total,x)=>total+Number(x),0),outer=Number(digits[0])+Number(digits[3]),inner=Number(digits[1])+Number(digits[2]),firstEven=Number(digits[0])%2===0,lastEven=Number(digits[3])%2===0;
+    clues={sum,outer,inner,firstEven,lastEven};
+    valid=candidate=>{if(candidate.length!==4||candidate[0]==='0'||new Set(candidate).size!==4)return false;const d=[...candidate].map(Number);return d.reduce((t,n)=>t+n,0)===sum&&d[0]+d[3]===outer&&d[1]+d[2]===inner&&(d[0]%2===0)===firstEven&&(d[3]%2===0)===lastEven};
+  }while(!valid(code));
   const distractors=[];
-  for(let tries=0;tries<400&&distractors.length<4;tries++){const candidate=String(Math.floor(100+Math.random()*900));if(candidate!==code&&!distractors.includes(candidate)&&!valid(candidate))distractors.push(candidate)}
-  while(distractors.length<4){const candidate=String(100+((Number(code)+distractors.length*137)%900));if(candidate!==code&&!distractors.includes(candidate)&&!valid(candidate))distractors.push(candidate)}
+  for(let tries=0;tries<8000&&distractors.length<4;tries++){const candidate=String(Math.floor(1000+Math.random()*9000));if(candidate!==code&&!distractors.includes(candidate)&&candidate[0]!=='0'&&new Set(candidate).size===4&&[...candidate].reduce((t,n)=>t+Number(n),0)===clues.sum&&!valid(candidate))distractors.push(candidate)}
+  while(distractors.length<4){const d=shuffledCopy([...code]);[d[0],d[1]]=[d[1],d[0]];const candidate=d.join('');if(candidate!==code&&!distractors.includes(candidate)&&candidate[0]!=='0'&&new Set(candidate).size===4&&!valid(candidate))distractors.push(candidate);else{const candidate2=String(1023+distractors.length*137);if(candidate2!==code&&!distractors.includes(candidate2)&&!valid(candidate2))distractors.push(candidate2)}}
   const evenLabel=n=>n?'คู่':'คี่';
-  const prompt=`รหัส 3 หลัก: ผลรวมเลขโดด = ${clues.sum} · หลักสิบเป็นเลข${evenLabel(clues.tensEven)} · หลักหน่วยเป็นเลข${evenLabel(clues.onesEven)} · ห้ามเลขซ้ำ`;
-  return choiceChallenge(prompt,code,distractors,'code-'+code,'ใช้เงื่อนไขทั้งสามข้อคัดตัวเลือก');
+  const prompt=`รหัส 4 หลัก · ผลรวมเลขโดด ${clues.sum} · หลักพันและหลักหน่วยรวมกันได้ ${clues.outer} · หลักร้อยกับหลักสิบรวมกันได้ ${clues.inner} · หลักพันเป็นเลข${evenLabel(clues.firstEven)} · หลักหน่วยเป็นเลข${evenLabel(clues.lastEven)} · ห้ามเลขซ้ำ`;
+  return choiceChallenge(prompt,code,distractors,'code-'+code,'ตรวจทุกเงื่อนไขพร้อมกัน: ผลรวมคู่หลัก ผลรวมคี่หลัก และเลขคู่/คี่');
+}
+function createOddChallenge(){
+  const groups=[['นก','ปลา','แมว','สุนัข','รถยนต์'],['ดาวอังคาร','ดาวศุกร์','ดาวพฤหัสบดี','ดาวเสาร์','ดวงจันทร์'],['กีตาร์','เปียโน','ไวโอลิน','กลอง','ไมโครโฟน'],['มกราคม','มีนาคม','พฤษภาคม','กรกฎาคม','วันอังคาร'],['ทองคำ','เงิน','ทองแดง','เหล็ก','เพชร'],['วิ่ง','ว่ายน้ำ','ปั่นจักรยาน','กระโดดเชือก','อ่านหนังสือ'],['กรุงเทพฯ','เชียงใหม่','ภูเก็ต','ขอนแก่น','ประเทศไทย'],['สามเหลี่ยม','สี่เหลี่ยม','วงกลม','ห้าเหลี่ยม','ลูกบาศก์']];
+  const group=groups[Math.floor(Math.random()*groups.length)],outsider=group[group.length-1],choices=shuffledCopy([...group.slice(0,4),outsider]);
+  return choiceChallenge(`คำใดไม่เข้าพวก?  ${choices.join(' · ')}`,outsider,choices.filter(x=>x!==outsider),`odd-${choices.join('-')}`,'หาคุณสมบัติร่วมของ 4 ตัวเลือก แล้วเลือกตัวที่ต่าง');
+}
+function createDetectiveChallenge(){
+  const names=shuffledCopy(['มีนา','ต้น','แพร','วิน']);
+  for(let attempt=0;attempt<500;attempt++){
+    const subsets=names.map(()=>{let subset=names.filter(()=>Math.random()<.5);if(!subset.length||subset.length===names.length)subset=[names[Math.floor(Math.random()*names.length)]];return subset});
+    const counts=names.map(culprit=>subsets.filter(set=>set.includes(culprit)).length),solutions=counts.map((n,i)=>n===1?i:-1).filter(i=>i>=0);
+    if(solutions.length!==1)continue;
+    const lines=subsets.map((set,i)=>`${names[i]}: “คนร้ายคือ ${set.join(' หรือ ')}”`);
+    return choiceChallenge(`มีคนร้าย 1 คน และมีคำให้การจริงเพียง 1 ข้อ
+${lines.join(' · ')}`,names[solutions[0]],names.filter((_,i)=>i!==solutions[0]),`detective-${names.join('')}-${subsets.map(s=>s.join('')).join('-')}`,'นับจำนวนคำให้การที่เป็นจริงของผู้ต้องสงสัยแต่ละคน');
+  }
+  return createLogicChallenge();
+}
+function createAlgebraChallenge(){
+  const x=3+Math.floor(Math.random()*18),a=4+Math.floor(Math.random()*7),b=2+Math.floor(Math.random()*20),c=2+Math.floor(Math.random()*(a-2)),d=(a-c)*x+b;
+  const answer=x,prompt=`หาค่า x:  ${a}x + ${b} = ${c}x + ${d}`;
+  return choiceChallenge(prompt,String(answer),[answer+1,answer-1,answer+2,Math.max(0,answer-3)],`algebra-${a}-${b}-${c}-${d}`,'ย้ายพจน์ x มาไว้ฝั่งเดียว แล้วแยกค่าคงที่');
+}
+function createProbabilityChallenge(){
+  const cases=[['ทอยลูกเต๋า 2 ลูก ผลรวมได้ 7','1/6',['1/12','1/4','1/3','5/12']],['ทอยลูกเต๋า 1 ลูก ได้เลขคู่','1/2',['1/3','2/3','1/6','5/6']],['หยิบไพ่ 1 ใบจากสำรับ 52 ใบ ได้ A','1/13',['1/4','1/26','1/12','4/13']],['โยนเหรียญ 3 ครั้ง ออกหัวทั้งหมด','1/8',['1/4','1/6','1/16','3/8']],['ทอยลูกเต๋า 2 ลูก ได้แต้มเหมือนกัน','1/6',['1/12','1/3','1/2','5/36']],['หยิบลูกบอลแดง 3 จาก 10 ลูก 1 ครั้ง','3/10',['1/3','2/5','1/5','7/10']],['ทอยลูกเต๋า 2 ลูก ผลรวมได้ 8','5/36',['1/6','1/9','1/12','7/36']],['โยนเหรียญ 4 ครั้ง ได้หัว 2 ครั้งพอดี','3/8',['1/4','1/2','5/16','5/8']],['จับไพ่ 1 ใบ ได้ไพ่โพแดง','1/4',['1/13','1/2','1/3','3/4']],['ทอยลูกเต๋า 2 ลูก ได้ผลรวมมากกว่า 10','1/12',['1/6','1/9','1/18','1/36']],['สุ่มเลข 1–10 ได้เลขเฉพาะ','2/5',['1/5','1/2','3/5','7/10']]];
+  const [prompt,answer,distractors]=cases[Math.floor(Math.random()*cases.length)];
+  return choiceChallenge(`ความน่าจะเป็นเท่ากับเท่าไร?  ${prompt}`,answer,distractors,`prob-${prompt}`,'คำนวณจำนวนกรณีที่ต้องการ ÷ จำนวนกรณีทั้งหมด');
 }
 function createPatternChallenge() {
   const sets=[['🔴','🔵','🟡'],['▲','●','■'],['🌑','🌓','🌕'],['♠️','♥️','♦️'],['🍋','🍇','🍒']];
@@ -127,11 +174,15 @@ function createPatternChallenge() {
   return choiceChallenge(`จับรูปแบบแล้วเลือกตัวถัดไป:  ${sequence.join('  →  ')}  →  ?`,answer,distractors,`pattern-${set.join('')}-${start}-${step}`);
 }
 function createChallenge(type,used=[]) {
-  if(type==='math')return createMathChallenge();
+  if(type==='math')return createMathChallenge(typeof selectedMathDifficulty==='string'?selectedMathDifficulty:'medium');
   if(type==='logic')return createLogicChallenge();
   if(type==='word')return createWordChallenge(used);
   if(type==='code')return createCodeChallenge();
   if(type==='pattern')return createPatternChallenge();
+  if(type==='odd')return createOddChallenge();
+  if(type==='detective')return createDetectiveChallenge();
+  if(type==='algebra')return createAlgebraChallenge();
+  if(type==='probability')return createProbabilityChallenge();
   return null;
 }
 function createUniqueChallenge(type,used=[]) {

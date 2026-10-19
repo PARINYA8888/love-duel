@@ -65,11 +65,16 @@
           <button type="button" class="game-option" data-game="math" aria-pressed="false"><span class="game-option-icon">🧠</span><span><strong>คิดเลขเร็ว</strong><small>บวก ลบ คูณ หาร · 5 ตัวเลือก</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="logic" aria-pressed="false"><span class="game-option-icon">🔍</span><span><strong>ลำดับปริศนา</strong><small>แกะแพตเทิร์นตัวเลขระดับยาก</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="word" aria-pressed="false"><span class="game-option-icon">📝</span><span><strong>เรียงวลีปริศนา</strong><small>สลับคำแล้วเรียงให้ได้ใจความ</small></span><span class="game-option-check">✓</span></button>
-          <button type="button" class="game-option" data-game="code" aria-pressed="false"><span class="game-option-icon">🔐</span><span><strong>ถอดรหัส 3 หลัก</strong><small>ใช้เงื่อนไขหาเลขลับให้เจอ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="code" aria-pressed="false"><span class="game-option-icon">🔐</span><span><strong>ถอดรหัส 4 หลัก</strong><small>วิเคราะห์ผลรวมและคู่เลขให้เหลือคำตอบเดียว</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="pattern" aria-pressed="false"><span class="game-option-icon">🔷</span><span><strong>จับรูปแบบ</strong><small>ทายสัญลักษณ์ตัวต่อไป</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="risk" aria-pressed="false"><span class="game-option-icon">🎲</span><span><strong>ประมูลแต้ม</strong><small>เลือกเดิมพันสูงชนะ แต้มลดตามเลข</small></span><span class="game-option-check">✓</span></button>
           <button type="button" class="game-option" data-game="reaction" aria-pressed="false"><span class="game-option-icon">⚡</span><span><strong>วัดความไว</strong><small>รอสัญญาณแล้วแตะให้ไว · 8 รอบ</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="odd" aria-pressed="false"><span class="game-option-icon">🕵️</span><span><strong>คำไหนต่าง</strong><small>จับหมวดหมู่แล้วหาตัวแปลก</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="detective" aria-pressed="false"><span class="game-option-icon">🔎</span><span><strong>คดีคำให้การ</strong><small>วิเคราะห์คำจริงหนึ่งข้อเพื่อหาคนร้าย</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="algebra" aria-pressed="false"><span class="game-option-icon">📐</span><span><strong>สมการตัวแปร</strong><small>แก้สมการ x สองฝั่ง แข่งกับเวลา</small></span><span class="game-option-check">✓</span></button>
+          <button type="button" class="game-option" data-game="probability" aria-pressed="false"><span class="game-option-icon">🎲</span><span><strong>คิดความน่าจะเป็น</strong><small>คำนวณโอกาสจากลูกเต๋าและไพ่</small></span><span class="game-option-check">✓</span></button>
         </div>
+        <div id="mathDifficultyPanel" class="math-difficulty hidden"><label>ระดับคิดเลขเร็ว</label><div id="mathDifficulty" class="difficulty-seg" role="group" aria-label="เลือกระดับคิดเลขเร็ว"><button type="button" data-difficulty="easy">ง่าย</button><button type="button" data-difficulty="medium" class="selected">ปานกลาง</button><button type="button" data-difficulty="hard">ยาก</button><button type="button" data-difficulty="pro">โปร</button></div><small id="mathDifficultyHint">โจทย์พื้นฐาน คิดไว เล่นสบาย ๆ</small></div>
       </div>
       <div class="players">
         <div class="player-slot" id="p1"><div class="avatar">1</div><div><b>รอผู้เล่น</b><small>ยังไม่พร้อม</small></div><i></i></div>
@@ -109,6 +114,7 @@
       <div id="quizPanel">
       <div class="game-top">
         <div><small>คำถามที่</small><strong id="qNo">1 / 20</strong></div>
+        <div class="countdown-pill" id="quizCountdown" aria-live="off"><span>⏱</span><strong id="quizTimer">30</strong><small>วิ</small></div>
         <div class="scores"><span id="scoreMe">0</span><em>:</em><span id="scoreOther">0</span></div>
       </div>
       <div id="roleBanner" class="role-banner" aria-live="polite"></div>
@@ -131,7 +137,7 @@
       </div>
       </div>
       <div id="miniPanel" class="hidden">
-        <div class="game-top"><div><small id="miniRoundLabel">รอบที่</small><strong id="miniRound">1 / 1</strong></div><div class="scores"><span id="miniScoreMe">0</span><em>:</em><span id="miniScoreOther">0</span></div></div>
+        <div class="game-top"><div><small id="miniRoundLabel">รอบที่</small><strong id="miniRound">1 / 1</strong></div><div class="countdown-pill" id="miniCountdown" aria-live="off"><span>⏱</span><strong id="miniTimer">30</strong><small>วิ</small></div><div class="scores"><span id="miniScoreMe">0</span><em>:</em><span id="miniScoreOther">0</span></div></div>
         <div id="miniBanner" class="role-banner" aria-live="polite"></div>
         <div class="card mini-card"><div class="mini-heading"><span id="miniIcon">🎮</span><div><h2 id="miniTitle">เกม</h2><p id="miniDescription"></p></div></div><div id="miniContent"></div></div>
       </div>
@@ -154,4 +160,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-

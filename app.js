@@ -70,7 +70,9 @@ const expandedByCategory=Object.fromEntries(categoryNamesForBank().map(name=>[na
 function categoryNamesForBank(){return ['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ']}
 let extrasLeft=1000-questions.length,bankTurn=0;
 while(extrasLeft>0){const category=categoryNamesForBank()[bankTurn%6],extra=expandedByCategory[category].shift();if(!extra){bankTurn++;if(bankTurn>6*200)break;continue}questions.push(extra);extrasLeft--;bankTurn++}
-let peer=null,conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=8,selectedMode='alternate',selectedGame='quiz',timerId=null;
+let peer=null,conn=null,isHost=false,room='',me='',other='',state=null,selectedRounds=8,selectedMode='alternate',selectedGame='quiz',selectedMathDifficulty='medium',timerId=null,miniClockId=null,miniClockKey='',emojiDraft='';
+const challengeGameTypes=['math','logic','word','code','pattern','odd','detective','algebra','probability'];
+const isChallengeGame=type=>challengeGameTypes.includes(type);
 let selectedAnswerMode='turns',resumePending=false,reconnectTimer=null,resumeAttempts=0,sessionToken='',savedSession=null,installPrompt=null,joinAttempts=0,joinRetryTimer=null,connectionTimer=null,hostCreateTimer=null,hostCreatePending=false;
 const categoryNames=['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ'];
 const defaultCategories=['ความทรงจำ','ความชอบ','อนาคต','ความสัมพันธ์','ชีวิตประจำวัน','กวน ๆ'];
@@ -78,9 +80,9 @@ const roundOptions=[8,10,15,20,30,40];
 const sessionKey='love-duel-session-v2';
 let selectedCategories=[...defaultCategories];
 savedSession=readSavedSession();
-if(savedSession?.state&&!savedSession.state.gameType)savedSession.state.gameType='quiz';
+if(savedSession?.state&&!savedSession.state.gameType)savedSession.state.gameType='quiz';if(savedSession?.state&&!savedSession.state.mathDifficulty)savedSession.state.mathDifficulty='medium';
 if(savedSession?.state?.gameType==='cannon'){savedSession.state.gameType='quiz';savedSession.state.phase='lobby';savedSession.state.score={host:0,guest:0};savedSession.state.history=[];delete savedSession.state.mini;(savedSession.state.players||[]).forEach(player=>player.ready=false)}
-if(savedSession?.state)selectedGame=savedSession.state.gameType;
+if(savedSession?.state){selectedGame=savedSession.state.gameType;selectedMathDifficulty=savedSession.state.mathDifficulty||'medium';}
 function show(name){Object.values(screens).forEach(screen=>screen.classList.remove('active'));screens[name].classList.add('active');window.scrollTo(0,0)}
 function protectPullToRefresh(){let startY=0;document.addEventListener('touchstart',event=>{startY=event.touches[0].clientY},{passive:true});document.addEventListener('touchmove',event=>{const y=event.touches[0].clientY;if(window.scrollY<=0&&y>startY)event.preventDefault()},{passive:false});document.addEventListener('touchend',()=>{startY=0},{passive:true});window.addEventListener('beforeunload',event=>{saveSession();if(state&&['choose','guess','simultaneous'].includes(state.phase)){event.preventDefault();event.returnValue=''}})}
 protectPullToRefresh();
@@ -106,6 +108,7 @@ publishLobbySettings(true);
 }else updateSettingControls();
 };
 $('#gameOptions').onclick=e=>{const button=e.target.closest('[data-game]');if(!button||button.disabled)return;selectedGame=button.dataset.game;if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
+$('#mathDifficulty').onclick=e=>{const button=e.target.closest('[data-difficulty]');if(!button||button.disabled)return;selectedMathDifficulty=button.dataset.difficulty;if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
 $('#allCategoriesBtn').onclick=()=>{if(state&&!isHost)return;selectedCategories=[...categoryNames];if(state&&isHost)publishLobbySettings(true);else updateSettingControls()};
 $('#rounds').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedRounds=Number(button.dataset.value);if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
 $('#mode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedMode=button.dataset.value;if(isHost&&state?.phase==='lobby')publishLobbySettings();else updateSettingControls()};
@@ -125,7 +128,7 @@ function safeWrite(key,value){try{localStorage.setItem(key,value);return true}ca
 function safeRemove(key){try{localStorage.removeItem(key)}catch(e){}}
 function newToken(){return crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('')}
 function readSavedSession(){try{const value=JSON.parse(safeRead(sessionKey)||'null');return value&&value.room&&value.state&&Date.now()-value.savedAt<7*24*60*60*1000?value:null}catch(e){return null}}
-function displayResume(){const panel=$('#resumePanel');if(!panel)return;if(!savedSession){panel.classList.add('hidden');return}const s=savedSession.state,gameName={ox:'เกม OX',rps:'เป่ายิ้งฉุบ',sync:'ใจตรงกัน',target:'ทายเลขเป้าหมาย',split:'แบ่งหรือเก็บ',high:'เลขวงจร 5 ท่า',memory:'จับคู่ความจำ',emoji:'ถอดรหัสอีโมจิ',math:'คิดเลขเร็ว',logic:'ลำดับปริศนา',word:'เรียงวลีปริศนา',code:'ถอดรหัส 3 หลัก',pattern:'จับรูปแบบ',risk:'ประมูลแต้ม',reaction:'วัดความไว'}[s.gameType];const phase=s.phase==='lobby'?'ห้องรอเริ่ม':s.phase==='finished'?'จบเกมแล้ว':gameName||'คำถามที่ '+Math.min((s.index||0)+1,s.rounds||1);$('#resumeSummary').textContent=phase+' · ห้อง '+savedSession.room;panel.classList.remove('hidden')}
+function displayResume(){const panel=$('#resumePanel');if(!panel)return;if(!savedSession){panel.classList.add('hidden');return}const s=savedSession.state,gameName={ox:'เกม OX',rps:'เป่ายิ้งฉุบ',sync:'ใจตรงกัน',target:'ทายเลขเป้าหมาย',split:'แบ่งหรือเก็บ',high:'เลขวงจร 5 ท่า',memory:'จับคู่ความจำ',emoji:'ถอดรหัสอีโมจิ',math:'คิดเลขเร็ว',logic:'ลำดับปริศนา',word:'เรียงวลีปริศนา',code:'ถอดรหัส 4 หลัก',pattern:'จับรูปแบบ',risk:'ประมูลแต้ม',reaction:'วัดความไว'}[s.gameType];const phase=s.phase==='lobby'?'ห้องรอเริ่ม':s.phase==='finished'?'จบเกมแล้ว':gameName||'คำถามที่ '+Math.min((s.index||0)+1,s.rounds||1);$('#resumeSummary').textContent=phase+' · ห้อง '+savedSession.room;panel.classList.remove('hidden')}
 function saveSession(){if(!room||!state)return;const record={room,isHost,name:me,other,token:sessionToken,state,savedAt:Date.now()};if(safeWrite(sessionKey,JSON.stringify(record)))savedSession=record;displayResume()}
 function clearSavedSession(){safeRemove(sessionKey);savedSession=null;displayResume()}
 function send(type,payload={}){saveSession();if(conn&&conn.open)conn.send({type,...payload})}
@@ -133,26 +136,59 @@ function destroyPeer(){if(reconnectTimer){clearTimeout(reconnectTimer);reconnect
 function setConn(ok){$('#connection').textContent=ok?(conn?.open?'เชื่อมต่อแล้ว':'เซิร์ฟเวอร์พร้อม'):resumePending?'กำลังกลับเข้าห้อง…':'ยังไม่เชื่อมต่อ';$('#connection').className='connection '+(ok?'online':'offline')}
 function updateLobby(){
 const ps=state?.players||[];
-if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||8;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';selectedGame=state.gameType||'quiz'}
+if(state){selectedCategories=categoryNames.filter(name=>(state.categories||defaultCategories).includes(name));if(!selectedCategories.length)selectedCategories=[...defaultCategories];selectedRounds=Number(state.rounds)||8;selectedMode=state.mode||'alternate';selectedAnswerMode=state.answerMode||'turns';selectedGame=state.gameType||'quiz';selectedMathDifficulty=state.mathDifficulty||'medium'}
 [['#p1',ps[0]],['#p2',ps[1]]].forEach(([id,p])=>{const el=$(id);el.querySelector('b').textContent=p?.name||'รอผู้เล่น';el.querySelector('small').textContent=!p?.name?'ยังไม่พร้อม':p.ready?'พร้อมแล้ว':p.id==='guest'&&!conn?.open?'กำลังกลับมา…':'ยังไม่พร้อม';el.classList.toggle('ready',!!p?.ready)});
 $('#roomCode').textContent=room;const bothReady=ps.length===2&&ps.every(p=>p?.name&&p.ready);
 $('#lobbyHint').textContent=isHost?(!ps[1]?.name?'เลือกเกมที่อยากเล่น แล้วส่งรหัสห้องให้แฟน':!conn?.open?'รออีกคนกลับมาเชื่อมต่อ…':bothReady?'ทั้งคู่พร้อมแล้ว กดเริ่มเกมได้เลย':'เลือกเกมให้เรียบร้อย แล้วกด “พร้อมเล่น”'):'รอเจ้าของห้องเลือกเกมและเริ่มเกม';
 const mePlayer=ps.find(p=>p?.id===myRole());$('#readyBtn').textContent=isHost&&!conn?.open?'รอผู้เล่น':isHost&&bothReady?'เริ่มเกม':'พร้อมเล่น';$('#readyBtn').disabled=isHost?(!conn||!conn.open||!!mePlayer?.ready&&!bothReady):(!conn||!conn.open||!!mePlayer?.ready);
 updateSettingControls();saveSession()
 }
-function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],gameType:selectedGame,categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,index:0,questionOrder,questionDeck:questionOrder.slice(0,Math.min(selectedRounds,questionOrder.length)).map(index=>questions[index]),chooser:null,chooserByRound:{},actual:null,guess:null,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
-function publishLobbySettings(shuffleQuestions=false){if(!isHost||!state||state.phase!=='lobby')return;state.gameType=selectedGame;state.categories=[...selectedCategories];state.rounds=selectedRounds;state.mode=selectedMode;state.answerMode=selectedAnswerMode;if(shuffleQuestions||!state.questionDeck||state.questionDeck.length<state.rounds){state.questionOrder=shuffledQuestionOrder(selectedCategories);state.questionDeck=state.questionOrder.slice(0,Math.min(state.rounds,state.questionOrder.length)).map(index=>questions[index]);state.chooserByRound={}}updateLobby();send('LOBBY',{state})}
-function updateSettingControls(){const available=questionsInCategories().length,validRounds=roundOptions.filter(n=>n<=available),locked=!!state&&(!isHost||state.phase!=='lobby');if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(n=>n<selectedRounds).pop()||validRounds[0]||5;$('#questionCount').textContent=state&&!isHost?'เจ้าของห้องเลือกหมวดคำถามให้ทั้งคู่':'มี '+available+' คำถาม จาก '+selectedCategories.length+' หมวดที่เลือก';document.querySelectorAll('#categories [data-category]').forEach(b=>{const selected=selectedCategories.includes(b.dataset.category);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.querySelector('.category-copy small').textContent=questions.filter(q=>q[0]===b.dataset.category).length+' คำถาม';b.disabled=locked});document.querySelectorAll('#rounds button').forEach(b=>{const round=Number(b.dataset.value);b.classList.toggle('selected',round===selectedRounds);b.disabled=round>available||locked});document.querySelectorAll('#mode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedMode);b.disabled=selectedAnswerMode==='simultaneous'||locked});document.querySelectorAll('#answerMode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedAnswerMode);b.disabled=locked});document.querySelectorAll('#gameOptions [data-game]').forEach(b=>{const selected=b.dataset.game===selectedGame;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.disabled=locked});$('#questionSettings').classList.toggle('hidden',selectedGame!=='quiz');$('.settings').classList.toggle('hidden',selectedGame!=='quiz');$('#chooserSettings').classList.toggle('hidden',selectedAnswerMode==='simultaneous');$('#allCategoriesBtn').disabled=locked}
-function startGuessTimer(){clearInterval(timerId);if(state.phase!=='guess'||Number.isInteger(state.guess))return;$('#talk').classList.remove('hidden');$('#timer').textContent=60;timerId=setInterval(()=>{const n=Number($('#timer').textContent)-1;$('#timer').textContent=n;if(n<=0){clearInterval(timerId);if(!Number.isInteger(state.guess)){state.guess=null;lockChoices();$('#roleBanner').textContent='หมดเวลา · กำลังเฉลยคำตอบ';toast('หมดเวลา ระบบกำลังเฉลยคำตอบ');if(isHost)reveal();else send('GUESS',{n:null})}}},1000)}
+function makeState(){const categories=[...selectedCategories],questionOrder=shuffledQuestionOrder(categories);return{players:[{id:'host',name:me,ready:false},{id:'guest',name:other,ready:false,token:null}],gameType:selectedGame,mathDifficulty:selectedMathDifficulty,categories,rounds:Math.min(selectedRounds,questionOrder.length),mode:selectedMode,answerMode:selectedAnswerMode,index:0,questionOrder,questionDeck:questionOrder.slice(0,Math.min(selectedRounds,questionOrder.length)).map(index=>questions[index]),chooser:null,chooserByRound:{},actual:null,guess:null,answers:{host:{self:null,guess:null},guest:{self:null,guess:null}},simSubmitted:{host:{self:false,guess:false},guest:{self:false,guess:false}},score:{host:0,guest:0},history:[],phase:'lobby'}}
+function publishLobbySettings(shuffleQuestions=false){if(!isHost||!state||state.phase!=='lobby')return;state.gameType=selectedGame;state.mathDifficulty=selectedMathDifficulty;state.categories=[...selectedCategories];state.rounds=selectedRounds;state.mode=selectedMode;state.answerMode=selectedAnswerMode;if(shuffleQuestions||!state.questionDeck||state.questionDeck.length<state.rounds){state.questionOrder=shuffledQuestionOrder(selectedCategories);state.questionDeck=state.questionOrder.slice(0,Math.min(state.rounds,state.questionOrder.length)).map(index=>questions[index]);state.chooserByRound={}}updateLobby();send('LOBBY',{state})}
+function updateSettingControls(){
+ const available=questionsInCategories().length,validRounds=roundOptions.filter(n=>n<=available),locked=!!state&&(!isHost||state.phase!=='lobby');
+ if(!validRounds.includes(selectedRounds))selectedRounds=validRounds.filter(n=>n<selectedRounds).pop()||validRounds[0]||5;
+ $('#questionCount').textContent=state&&!isHost?'เจ้าของห้องเลือกหมวดคำถามให้ทั้งคู่':'มี '+available+' คำถาม จาก '+selectedCategories.length+' หมวดที่เลือก';
+ document.querySelectorAll('#categories [data-category]').forEach(b=>{const selected=selectedCategories.includes(b.dataset.category);b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.querySelector('.category-copy small').textContent=questions.filter(q=>q[0]===b.dataset.category).length+' คำถาม';b.disabled=locked});
+ document.querySelectorAll('#rounds button').forEach(b=>{const round=Number(b.dataset.value);b.classList.toggle('selected',round===selectedRounds);b.disabled=round>available||locked});
+ document.querySelectorAll('#mode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedMode);b.disabled=selectedAnswerMode==='simultaneous'||locked});
+ document.querySelectorAll('#answerMode button').forEach(b=>{b.classList.toggle('selected',b.dataset.value===selectedAnswerMode);b.disabled=locked});
+ document.querySelectorAll('#gameOptions [data-game]').forEach(b=>{const selected=b.dataset.game===selectedGame;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));b.disabled=locked});
+ document.querySelectorAll('#mathDifficulty [data-difficulty]').forEach(b=>{b.classList.toggle('selected',b.dataset.difficulty===selectedMathDifficulty);b.disabled=locked});
+ $('#mathDifficultyPanel').classList.toggle('hidden',selectedGame!=='math');
+ const hints={easy:'โจทย์พื้นฐาน คิดไว เล่นสบาย ๆ',medium:'โจทย์หลายขั้น ระดับมัธยม',hard:'หลายเครื่องหมายและวงเล็บ ต้องคิดเป็นลำดับ',pro:'โจทย์ซับซ้อนขึ้น มีหารและคำนวณหลายขั้น'};
+ $('#mathDifficultyHint').textContent=hints[selectedMathDifficulty]||hints.medium;
+ $('#questionSettings').classList.toggle('hidden',selectedGame!=='quiz');$('.settings').classList.toggle('hidden',selectedGame!=='quiz');$('#chooserSettings').classList.toggle('hidden',selectedAnswerMode==='simultaneous');$('#allCategoriesBtn').disabled=locked
+}
+function quizDuration(){return state.answerMode==='simultaneous'?75:state.phase==='choose'?30:60}
+function ensureQuizDeadline(){
+ if(!state||state.gameType!=='quiz'||!['choose','guess','simultaneous'].includes(state.phase)){if(state){state.deadlineAt=null;state.deadlineKey=''}return}
+ const key=state.index+':'+state.phase+':'+state.answerMode;
+ if(isHost&&state.deadlineKey!==key){state.deadlineKey=key;state.deadlineAt=Date.now()+quizDuration()*1000}
+ if(!Number.isFinite(state.deadlineAt))state.deadlineAt=Date.now()+quizDuration()*1000
+}
+function quizTimeout(){
+ if(!isHost||state?.gameType!=='quiz')return;
+ state.deadlineAt=null;
+ if(state.answerMode==='simultaneous'&&state.phase==='simultaneous'){revealSimultaneous(true);return}
+ if(state.phase==='choose'){const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'turns',actual:null,guess:null,ok:false,chooser:state.chooser,timeout:true};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:null,guess:null,ok:false,score:state.score});saveSession();return}
+ if(state.phase==='guess'&&!Number.isInteger(state.guess)){state.guess=null;reveal()}
+}
+function startQuizTimer(){
+ clearInterval(timerId);if(!state||state.gameType!=='quiz'||!['choose','guess','simultaneous'].includes(state.phase)){ $('#quizCountdown').classList.add('hidden');return }
+ ensureQuizDeadline();$('#quizCountdown').classList.remove('hidden');
+ const tick=()=>{if(!state||state.gameType!=='quiz'||!['choose','guess','simultaneous'].includes(state.phase)){clearInterval(timerId);return}const left=Math.max(0,Math.ceil((state.deadlineAt-Date.now())/1000));$('#quizTimer').textContent=left;$('#quizCountdown').classList.toggle('urgent',left<=10);if(state.phase==='guess')$('#timer').textContent=left;if(left<=0){clearInterval(timerId);if(isHost)quizTimeout()}};
+ tick();timerId=setInterval(tick,250)
+}
 function blankAnswers(){return{host:{self:null,guess:null},guest:{self:null,guess:null}}}
 function blankSubmitted(){return{host:{self:false,guess:false},guest:{self:false,guess:false}}}
 function renderQuestion(resume=false){
-clearInterval(timerId);$('#quizPanel').classList.remove('hidden');$('#miniPanel').classList.add('hidden');const item=questionFor();$('#qNo').textContent=(state.index+1)+' / '+state.rounds;$('#category').textContent=item[0];$('#question').textContent=item[1];$('#choices').innerHTML=item[2].map((t,i)=>'<button class="choice" data-n="'+(i+1)+'"><span class="num">'+(i+1)+'</span><span class="txt">'+t+'</span></button>').join('');
-$('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#simProgress').classList.add('hidden');
-if(!resume){state.actual=null;state.guess=null;state.answers=blankAnswers();state.simSubmitted=blankSubmitted();state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';state.chooser=state.answerMode==='simultaneous'?null:chooserFor(state.index)}
-else if(state.answerMode!=='simultaneous'&&!state.chooser)state.chooser=chooserFor(state.index);
-document.querySelectorAll('.choice').forEach(button=>button.onclick=()=>pick(+button.dataset.n));
-if(state.answerMode==='simultaneous')renderSimultaneous();else configureClassicPhase();updateScores();saveSession()
+ clearInterval(timerId);$('#quizPanel').classList.remove('hidden');$('#miniPanel').classList.add('hidden');const item=questionFor();$('#qNo').textContent=(state.index+1)+' / '+state.rounds;$('#category').textContent=item[0];$('#question').textContent=item[1];$('#choices').innerHTML=item[2].map((t,i)=>'<button class="choice" data-n="'+(i+1)+'"><span class="num">'+(i+1)+'</span><span class="txt">'+t+'</span></button>').join('');
+ $('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#simProgress').classList.add('hidden');
+ if(!resume){state.actual=null;state.guess=null;state.answers=blankAnswers();state.simSubmitted=blankSubmitted();state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';state.chooser=state.answerMode==='simultaneous'?null:chooserFor(state.index);state.deadlineKey='';state.deadlineAt=null}
+ else if(state.answerMode!=='simultaneous'&&!state.chooser)state.chooser=chooserFor(state.index);
+ document.querySelectorAll('.choice').forEach(button=>button.onclick=()=>pick(+button.dataset.n));
+ if(state.answerMode==='simultaneous')renderSimultaneous();else configureClassicPhase();updateScores();ensureQuizDeadline();startQuizTimer();saveSession()
 }
 function configureClassicPhase(){
 if(state.phase==='reveal'){const entry=state.history?.[state.index];if(entry)renderReveal(entry);return}
@@ -168,20 +204,24 @@ state.answers=state.answers||blankAnswers();state.simSubmitted=state.simSubmitte
 $('#talk').classList.add('hidden');$('#reveal').classList.add('hidden');$('#simProgress').classList.remove('hidden');updateSimProgress();$('#roleBanner').textContent=step==='self'?'ข้อ 1/2 · เลือกคำตอบของคุณแบบลับ':step==='guess'?'ข้อ 2/2 · เดาคำตอบที่แฟนจะเลือกแบบลับ': 'ส่งครบ 2/2 แล้ว · รอแฟนตอบให้ครบ';
 document.querySelectorAll('.choice').forEach(button=>{button.disabled=state.phase!=='simultaneous'||!step;button.classList.toggle('locked',!step)});saveSession()
 }
-function pick(n){if(!Number.isInteger(n)||n<1||n>4||!state)return;if(state.answerMode==='simultaneous'){pickSimultaneous(n);return}if(state.phase==='choose'&&state.chooser===myRole()){state.actual=n;state.phase='guess';configureClassicPhase();send('ACTUAL',{n,role:myRole()});toast('เลือกคำตอบแล้ว ส่งให้อีกคนทายแบบลับแล้ว')}else if(state.phase==='guess'&&state.chooser!==myRole()){state.guess=n;lockChoices();clearInterval(timerId);$('#revealNowBtn').classList.add('hidden');$('#roleBanner').textContent='ส่งคำตอบแล้ว · กำลังเฉลย…';$('#talkPrompt').textContent='ส่งคำตอบแล้ว ระบบกำลังเปิดผล';saveSession();if(isHost)reveal();else send('GUESS',{n})}}
+function pick(n){if(!Number.isInteger(n)||n<1||n>4||!state)return;if(state.answerMode==='simultaneous'){pickSimultaneous(n);return}if(state.phase==='choose'&&state.chooser===myRole()){state.actual=n;state.phase='guess';state.deadlineKey='';ensureQuizDeadline();configureClassicPhase();send('ACTUAL',{n,role:myRole(),deadlineAt:state.deadlineAt});startQuizTimer();toast('เลือกคำตอบแล้ว ส่งให้อีกคนทายแบบลับแล้ว')}else if(state.phase==='guess'&&state.chooser!==myRole()){state.guess=n;lockChoices();clearInterval(timerId);$('#revealNowBtn').classList.add('hidden');$('#roleBanner').textContent='ส่งคำตอบแล้ว · กำลังเฉลย…';$('#talkPrompt').textContent='ส่งคำตอบแล้ว ระบบกำลังเปิดผล';saveSession();if(isHost)reveal();else send('GUESS',{n})}}
 function pickSimultaneous(n){if(state.phase!=='simultaneous')return;state.answers=state.answers||blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();const role=myRole(),mine=state.answers[role],field=!Number.isInteger(mine.self)?'self':!Number.isInteger(mine.guess)?'guess':null;if(!field)return;mine[field]=n;state.simSubmitted[role][field]=true;saveSession();renderSimultaneous();if(isHost){publishSimProgress();if(state.phase==='simultaneous')toast(field==='self'?'บันทึกข้อ 1/2 แล้ว · เลือกอีกครั้งเพื่อเดาแฟน':'ส่งครบแล้ว · รอแฟนตอบ')}else{send('SIM_ANSWER',{index:state.index,field,n});toast(field==='self'?'บันทึกข้อ 1/2 แล้ว · แตะอีกครั้งเพื่อเดาแฟน':'ส่งครบแล้ว · รอแฟนตอบ')}}
 function simAnswersComplete(){return['host','guest'].every(role=>['self','guess'].every(field=>Number.isInteger(state.answers?.[role]?.[field])))}
 function publishSimProgress(){if(!isHost||state.phase!=='simultaneous')return;if(simAnswersComplete()){revealSimultaneous();return}send('SIM_PROGRESS',{index:state.index,submitted:state.simSubmitted})}
-function revealSimultaneous(){if(!isHost||state.phase!=='simultaneous'||!simAnswersComplete())return;const answers=JSON.parse(JSON.stringify(state.answers)),correct={host:answers.host.guess===answers.guest.self,guest:answers.guest.guess===answers.host.self};state.score.host+=Number(correct.host);state.score.guest+=Number(correct.guest);const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'simultaneous',answers,correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('SIM_REVEAL',{index:state.index,answers,correct,score:state.score});saveSession()}
+function revealSimultaneous(allowMissing=false){
+ if(!isHost||state.phase!=='simultaneous'||(!allowMissing&&!simAnswersComplete()))return;
+ const answers=JSON.parse(JSON.stringify(state.answers)),correct={host:Number.isInteger(answers.host.guess)&&Number.isInteger(answers.guest.self)&&answers.host.guess===answers.guest.self,guest:Number.isInteger(answers.guest.guess)&&Number.isInteger(answers.host.self)&&answers.guest.guess===answers.host.self};
+ state.score.host+=Number(correct.host);state.score.guest+=Number(correct.guest);const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'simultaneous',answers,correct,timeout:allowMissing};state.history[state.index]=entry;state.deadlineAt=null;state.phase='reveal';renderReveal(entry);send('SIM_REVEAL',{index:state.index,answers,correct,score:state.score});saveSession()
+}
 function choiceText(value){const options=questionFor()[2];return Number.isInteger(value)&&value>=1&&value<=options.length?options[value-1]:'ไม่ได้ตอบ'}
 function choiceTextAt(question,answer,choices){const options=Array.isArray(choices)?choices:questions.find(q=>q[1]===question)?.[2];return options&&Number.isInteger(answer)&&answer>=1&&answer<=options.length?options[answer-1]:'ไม่ได้ตอบ'}
 function renderReveal(entry){
-if(!entry)return;clearInterval(timerId);lockChoices();$('#talk').classList.add('hidden');$('#simProgress').classList.add('hidden');$('#reveal').classList.remove('hidden');
+if(!entry)return;clearInterval(timerId);$('#quizCountdown').classList.add('hidden');lockChoices();$('#talk').classList.add('hidden');$('#simProgress').classList.add('hidden');$('#reveal').classList.remove('hidden');
 if(entry.answerMode==='simultaneous'){$('#classicReveal').classList.add('hidden');const box=$('#simReveal');box.replaceChildren();box.classList.remove('hidden');const hostName=state.players?.[0]?.name||'คนที่ 1',guestName=state.players?.[1]?.name||'คนที่ 2';const addCard=(title,answer,guessLabel,guess,ok)=>{const card=document.createElement('div');card.className='sim-answer-card '+(ok?'correct':'miss');const heading=document.createElement('small');heading.textContent=title;const actual=document.createElement('strong');actual.textContent=choiceText(answer);const detail=document.createElement('span');detail.textContent=guessLabel+': '+choiceText(guess)+(ok?' · ตรงกัน':' · ยังไม่ตรง');card.append(heading,actual,detail);box.append(card)};addCard(hostName+' ตอบ',entry.answers.host.self,guestName+' ทาย',entry.answers.guest.guess,!!entry.correct.guest);addCard(guestName+' ตอบ',entry.answers.guest.self,hostName+' ทาย',entry.answers.host.guess,!!entry.correct.host);const count=Number(!!entry.correct.host)+Number(!!entry.correct.guest);$('#resultText').textContent=count===2?'ทายใจกันถูกทั้งคู่!':count===1?'ทายใจตรงกัน 1 คน · ได้รู้จักกันมากขึ้น':'คำตอบต่างกัน · ชวนกันคุยต่อได้เลย';$('#resultText').className='result-text '+(count?'ok':'miss')}
 else{$('#classicReveal').classList.remove('hidden');$('#simReveal').classList.add('hidden');$('#actual').textContent=choiceText(entry.actual);$('#guess').textContent=choiceText(entry.guess);$('#resultText').textContent=entry.ok?'ทายถูก รู้ใจกันจริง ๆ':Number.isInteger(entry.guess)?'พลาดข้อนี้ แต่ได้รู้จักกันมากขึ้น':'หมดเวลา รอบนี้ไม่มีคะแนน';$('#resultText').className='result-text '+(entry.ok?'ok':'miss')}
 updateScores();saveSession()
 }
-function reveal(){clearInterval(timerId);if(!isHost||state.phase==='reveal'||!Number.isInteger(state.actual))return;const ok=state.actual===state.guess,guesser=state.chooser==='host'?'guest':'host';if(ok)state.score[guesser]++;const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'turns',actual:state.actual,guess:state.guess,ok,chooser:state.chooser};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:state.actual,guess:state.guess,ok,score:state.score});saveSession()}
+function reveal(){clearInterval(timerId);if(!isHost||state.phase==='reveal'||!Number.isInteger(state.actual))return;state.deadlineAt=null;const ok=state.actual===state.guess,guesser=state.chooser==='host'?'guest':'host';if(ok)state.score[guesser]++;const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'turns',actual:state.actual,guess:state.guess,ok,chooser:state.chooser};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);send('REVEAL',{index:state.index,actual:state.actual,guess:state.guess,ok,score:state.score});saveSession()}
 function escapeHtml(value){return String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
 function historyMarkup(h,i){
 if(h.kind==='mini')return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">'+escapeHtml(h.detail||'')+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+escapeHtml(h.badge||'จบเกม')+'</span></div>';
@@ -190,11 +230,11 @@ if(h.answerMode==='simultaneous'){const count=Number(!!h.correct?.host)+Number(!
 return'<div class="history-row"><span class="q">'+(i+1)+'. '+escapeHtml(h.question)+'<small class="answer-detail">คำตอบจริง: '+escapeHtml(choiceTextAt(h.question,h.actual,choices))+' · ทาย: '+escapeHtml(choiceTextAt(h.question,h.guess,choices))+'</small></span><span class="badge '+(h.ok?'ok':'miss')+'">'+(h.ok?'ตรงกัน':'ไม่ตรง')+'</span></div>'
 }
 function finish(){
-clearInterval(timerId);show('result');
+clearInterval(timerId);clearInterval(miniClockId);$('#quizCountdown').classList.add('hidden');$('#miniCountdown').classList.add('hidden');show('result');
 const role=myRole(),otherRole=role==='host'?'guest':'host',mine=state.score?.[role]||0,theirs=state.score?.[otherRole]||0;
 const winner=mine===theirs?null:mine>theirs?role:otherRole,players=state.players||[];
 const mineName=players[role==='host'?0:1]?.name||'คุณ',theirName=players[otherRole==='host'?0:1]?.name||'อีกคน';
-const multiScore=['sync','split','emoji','math','logic','word','code','pattern'].includes(state.gameType),max=state.gameType==='quiz'?state.rounds*(state.answerMode==='simultaneous'?2:1):(state.mini?.maxRounds||8)*(state.gameType==='risk'?4:multiScore?2:1);
+const multiScore=['sync','split','emoji',...challengeGameTypes].includes(state.gameType),max=state.gameType==='quiz'?state.rounds*(state.answerMode==='simultaneous'?2:1):(state.mini?.maxRounds||8)*(state.gameType==='risk'?4:multiScore?2:1);
 const correct=state.gameType==='quiz'?state.history.reduce((total,h)=>total+(h.answerMode==='simultaneous'?Number(!!h.correct?.host)+Number(!!h.correct?.guest):Number(!!h.ok)),0):mine+theirs;
 const pct=Math.min(100,Math.round(correct/Math.max(max,1)*100));
 $('#percent').textContent=pct+'%';
@@ -205,42 +245,70 @@ $('.history h3').textContent=state.gameType==='quiz'?'สรุปคำถา�
 $('#historyList').innerHTML=(state.history||[]).map(historyMarkup).join('');saveSession()
 }
 function createMiniState(type){
-const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},answerTimes:{host:null,guest:null},status:'choose',last:null,syncQuestion:Math.floor(Math.random()*syncPromptBank.length)};
-if(type==='ox')return{...base,board:Array(9).fill(''),turn:'host',winner:null,status:'play'};
-if(type==='rps')return{...base,status:'choose'};
-if(type==='reaction')return{...base,status:'ready'};
-if(type==='target')return{...base,target:Math.floor(Math.random()*10)+1};
-if(type==='memory'){const faces=['🍓','🍋','🍇','🍒','🥝','🍊','🫐','🍉'];return{...base,status:'play',cards:shuffledValues([...faces,...faces]),revealed:[],matched:[],turn:'host'}}
-if(type==='emoji'){const emojiOrder=shuffledValues(emojiPuzzleBank.map((_,index)=>index));return{...base,emojiOrder,emojiQuestion:emojiOrder[0]}}
-if(['math','logic','word','code','pattern'].includes(type)){const usedChallenges=[],challenge=createUniqueChallenge(type,usedChallenges);usedChallenges.push(challenge.id);return{...base,challenge,usedChallenges}}
-return base
+ const rounds=8,base={round:1,maxRounds:rounds,submissions:{host:null,guest:null},submitted:{host:false,guest:false},answerTimes:{host:null,guest:null},status:'choose',last:null,syncQuestion:Math.floor(Math.random()*syncPromptBank.length)};
+ if(type==='ox')return{...base,board:Array(9).fill(''),turn:'host',winner:null,status:'play'};
+ if(type==='rps')return{...base,status:'choose'};
+ if(type==='reaction')return{...base,status:'ready'};
+ if(type==='target')return{...base,target:Math.floor(Math.random()*10)+1};
+ if(type==='memory'){const faces=['🍓','🍋','🍇','🍒','🥝','🍊','🫐','🍉'];return{...base,status:'play',cards:shuffledValues([...faces,...faces]),revealed:[],matched:[],turn:'host'}}
+ if(type==='emoji'){const emojiOrder=shuffledValues(emojiPuzzleBank.map((_,index)=>index));return{...base,emojiOrder,emojiQuestion:emojiOrder[0]}}
+ if(isChallengeGame(type)){const usedChallenges=[],challenge=createUniqueChallenge(type,usedChallenges);usedChallenges.push(challenge.id);return{...base,challenge,usedChallenges}}
+ return base
 }
 function shuffledValues(values){const result=[...values];for(let i=result.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[result[i],result[j]]=[result[j],result[i]]}return result}
 function miniInfo(){
-return({
-ox:{title:'OX Duel',icon:'⭕',description:'แข่งวางหมาก 8 กระดาน ใครเรียงครบ 3 ช่องได้แต้ม'},
-rps:{title:'เป่ายิ้งฉุบ',icon:'✊',description:'เลือกพร้อมกันแบบลับ แข่งทั้งหมด 8 รอบ'},
-sync:{title:'ใจตรงกัน',icon:'🧲',description:'เลือกคำตอบพร้อมกัน ถ้าเลือกเหมือนกันทั้งคู่ได้คนละ 1 แต้ม'},
-target:{title:'ทายเลขเป้าหมาย',icon:'🎯',description:'เดาเลข 1–10 แบบลับ ใครใกล้เลขเป้าหมายกว่าได้แต้ม'},
-split:{title:'แบ่งหรือเก็บ',icon:'💎',description:'แบ่งพร้อมกันได้คนละ 1 · ถ้าอีกคนแบ่ง คนเก็บได้ 2'},
-high:{title:'เลขวงจร 5 ท่า',icon:'🔢',description:'วงจร 1→2→3→4→5→1 · แต่ละเลขชนะ 2 ตัวก่อนหน้า'},
-memory:{title:'จับคู่ความจำ',icon:'🃏',description:'ผลัดกันพลิกไพ่หาคู่ ใครจับคู่ได้มากกว่าชนะ'},
-emoji:{title:'ถอดรหัสอีโมจิ',icon:'🧩',description:'ถอดสำนวนไทยจากอีโมจิ 500 ปริศนา · สุ่มไม่ซ้ำ'},
-math:{title:'คิดเลขเร็ว',icon:'🧠',description:'โจทย์คณิตระดับมัธยม · 5 ตัวเลือก · ตอบพร้อมกัน'},
-logic:{title:'ลำดับปริศนา',icon:'🔍',description:'หาเลขถัดไปจากรูปแบบที่ซ่อนอยู่ · 5 ตัวเลือก'},
-word:{title:'เรียงวลีปริศนา',icon:'📝',description:'จัดคำให้เป็นวลีที่มีความหมาย · แข่งตอบพร้อมกัน'},
-code:{title:'ถอดรหัส 3 หลัก',icon:'🔐',description:'ใช้เงื่อนไขคัดรหัสลับให้เหลือคำตอบเดียว'},
-pattern:{title:'จับรูปแบบ',icon:'🔷',description:'อ่านลำดับสัญลักษณ์แล้วทายตัวถัดไป'},
-risk:{title:'ประมูลแต้ม',icon:'🎲',description:'เดิมพันเลข 1–5 · เลขสูงชนะ แต่ได้แต้มลดลง'},
-reaction:{title:'วัดความไว',icon:'⚡',description:'รอสัญญาณแล้วแตะให้เร็วที่สุด · แข่ง 8 รอบ'}
-})[state.gameType]||{title:'เกมคำถาม',icon:'💞',description:'คลังคำถามสำหรับคู่รัก'}
+ const info={
+ ox:{title:'OX Duel',icon:'⭕',description:'แข่งวางหมาก 8 กระดาน · แต่ละตาใช้เวลา 20 วินาที'},rps:{title:'เป่ายิ้งฉุบ',icon:'✊',description:'เลือกพร้อมกันแบบลับ · หมดเวลาแล้วคนที่ตอบได้เปรียบ'},sync:{title:'ใจตรงกัน',icon:'🧲',description:'เลือกคำตอบพร้อมกัน · ถ้าตรงกันได้คนละ 1 แต้ม'},target:{title:'ทายเลขเป้าหมาย',icon:'🎯',description:'เดาเลข 1–10 แบบลับ · ใครใกล้กว่าได้แต้ม'},split:{title:'แบ่งหรือเก็บ',icon:'💎',description:'ตัดสินใจพร้อมกัน · คิดให้ดีก่อนหมดเวลา'},high:{title:'เลขวงจร 5 ท่า',icon:'🔢',description:'วงจร 1→2→3→4→5→1 · แต่ละเลขชนะ 2 ตัวก่อนหน้า'},memory:{title:'จับคู่ความจำ',icon:'🃏',description:'ผลัดกันพลิกไพ่ · จับคู่ให้ทันก่อนหมดเวลา'},emoji:{title:'ถอดรหัสอีโมจิ',icon:'🧩',description:'พิมพ์คำตอบเอง · ปริศนาสำนวนไทยสุ่มไม่ซ้ำ'},math:{title:'คิดเลขเร็ว',icon:'🧠',description:'ระดับ '+({easy:'ง่าย',medium:'ปานกลาง',hard:'ยาก',pro:'โปร'}[state.mathDifficulty||'medium'])+' · ตอบถูกและเร็วกว่าได้แต้ม'},logic:{title:'ลำดับปริศนา',icon:'🔍',description:'แกะแพตเทิร์นตัวเลขระดับยาก · ตอบให้ทันเวลา'},word:{title:'เรียงวลีปริศนา',icon:'📝',description:'วิเคราะห์คำแล้วเรียงวลี · แข่งตอบพร้อมกัน'},code:{title:'ถอดรหัส 4 หลัก',icon:'🔐',description:'ใช้เงื่อนไขผลรวมและคู่เลขหาเลขลับ'},pattern:{title:'จับรูปแบบ',icon:'🔷',description:'อ่านลำดับสัญลักษณ์แล้วทายตัวถัดไป'},risk:{title:'ประมูลแต้ม',icon:'🎲',description:'เดิมพันเลข 1–5 · เลขสูงชนะ แต่ได้แต้มลดลง'},reaction:{title:'วัดความไว',icon:'⚡',description:'ตั้งท่า รอสัญญาณเดียวกัน แล้วแตะให้ไว'},odd:{title:'คำไหนต่าง',icon:'🕵️',description:'จับหมวดหมู่แล้วเลือกตัวแปลก · ต้องใช้เหตุผล'},detective:{title:'คดีคำให้การ',icon:'🔎',description:'มีคำให้การจริงเพียงข้อเดียว · วิเคราะห์หาคนร้าย'},algebra:{title:'สมการตัวแปร',icon:'📐',description:'ย้ายพจน์สองฝั่งแล้วแก้ค่า x'},probability:{title:'คิดความน่าจะเป็น',icon:'🎲',description:'คำนวณโอกาสจากลูกเต๋า เหรียญ และไพ่'}
+ };
+ return info[state.gameType]||{title:'เกมคำถาม',icon:'💞',description:'คลังคำถามสำหรับคู่รัก'}
 }
 function updateMiniScores(){const role=myRole();$('#miniScoreMe').textContent=state.score[role]||0;$('#miniScoreOther').textContent=state.score[role==='host'?'guest':'host']||0}
 let miniTimerKey="",miniStartedAt=0,reactionTimerKey="",reactionTimeoutId=null,reactionVisible=false,reactionStartedAt=0;
+function miniDuration(){
+ const type=state.gameType,mini=state.mini;
+ if(type==='ox')return 20;if(type==='memory')return mini.status==='miss'?12:35;
+ if(type==='reaction')return mini.status==='ready'?35:8;
+ if(type==='emoji')return 75;if(type==='math')return({easy:18,medium:28,hard:40,pro:55}[state.mathDifficulty||'medium']);
+ return({rps:20,sync:25,target:20,split:20,high:20,logic:45,word:40,code:90,pattern:30,risk:18,odd:35,detective:60,algebra:45,probability:40}[type]||30)
+}
+function ensureMiniDeadline(){
+ const mini=state?.mini;if(!mini||state.phase!=='mini'||mini.status==='reveal'){if(mini){mini.deadlineAt=null;mini.deadlineKey=''}return}
+ const key=[state.gameType,mini.round,mini.status,mini.turn||''].join(':');
+ if(isHost&&mini.deadlineKey!==key){mini.deadlineKey=key;mini.deadlineAt=Date.now()+miniDuration()*1000}
+ if(!Number.isFinite(mini.deadlineAt))mini.deadlineAt=Date.now()+miniDuration()*1000
+}
+function startMiniClock(){
+ clearInterval(miniClockId);const mini=state?.mini;if(!mini||state.phase!=='mini'||mini.status==='reveal'){ $('#miniCountdown').classList.add('hidden');return }
+ ensureMiniDeadline();$('#miniCountdown').classList.remove('hidden');
+ const tick=()=>{if(!state?.mini||state.phase!=='mini'||state.mini.status==='reveal'){clearInterval(miniClockId);$('#miniCountdown').classList.add('hidden');return}const left=Math.max(0,Math.ceil((state.mini.deadlineAt-Date.now())/1000));$('#miniTimer').textContent=left;$('#miniCountdown').classList.toggle('urgent',left<=8);if(left<=0){clearInterval(miniClockId);if(isHost)setTimeout(handleMiniTimeout,0)}};
+ tick();miniClockId=setInterval(tick,250)
+}
+function handleMiniTimeout(){
+ if(!isHost||!state?.mini||state.phase!=='mini'||state.mini.status==='reveal')return;
+ const mini=state.mini,role=mini.turn||null;mini.deadlineAt=null;
+ if(state.gameType==='ox'){
+   if(!role)return;const winner=role==='host'?'O':'X',winnerRole=role==='host'?'guest':'host';mini.status='reveal';mini.winner=winner;mini.last={winner,timeout:true};state.score[winnerRole]++;
+   state.history.push({kind:'mini',question:'เกม OX · กระดาน '+mini.round,detail:'หมดเวลาตาของ '+state.players[role==='host'?0:1].name+' · '+state.players[winnerRole==='host'?0:1].name+' ได้แต้ม',badge:'ชนะเพราะหมดเวลา',ok:true});miniStateChanged();return
+ }
+ if(state.gameType==='memory'){
+   const turn=mini.turn;mini.revealed=[];mini.turn=turn==='host'?'guest':'host';mini.status='play';state.history.push({kind:'mini',question:'จับคู่ความจำ · หมดเวลา',detail:state.players[turn==='host'?0:1].name+' ใช้เวลาเกินกำหนด',badge:'ส่งตา',ok:false});miniStateChanged();return
+ }
+ if(state.gameType==='reaction'&&mini.status==='ready'){
+   mini.submitted=mini.submitted||{host:false,guest:false};mini.last={host:mini.submitted.host?'พร้อม':'หมดเวลา',guest:mini.submitted.guest?'พร้อม':'หมดเวลา',winner:null,points:{host:0,guest:0}};mini.status='reveal';state.history.push({kind:'mini',question:'วัดความไว · รอบ '+mini.round,detail:'หมดเวลาเตรียมตัวก่อนเริ่มรอบ',badge:'หมดเวลา',ok:false});miniStateChanged();return
+ }
+ const timeoutRole=mini.submitted.host?'guest':'host';
+ if(state.gameType==='rps'){
+   mini.submissions=mini.submissions||{host:null,guest:null};mini.submitted=mini.submitted||{host:false,guest:false};
+   if(!mini.submitted[timeoutRole]){mini.submissions[timeoutRole]=TIMEOUT_CHOICE;mini.submitted[timeoutRole]=true}
+   if(mini.submitted.host&&mini.submitted.guest){const a=mini.submissions.host,b=mini.submissions.guest,winner=a===TIMEOUT_CHOICE&&b===TIMEOUT_CHOICE?null:a===TIMEOUT_CHOICE?'guest':b===TIMEOUT_CHOICE?'host':null;if(winner)state.score[winner]++;mini.last={host:a,guest:b,winner};mini.status='reveal';state.history.push({kind:'mini',question:'เป่ายิ้งฉุบ · รอบ '+mini.round,detail:state.players[0].name+': '+(a===TIMEOUT_CHOICE?'หมดเวลา':a)+' · '+state.players[1].name+': '+(b===TIMEOUT_CHOICE?'หมดเวลา':b),badge:winner?state.players[winner==='host'?0:1].name+' ชนะเพราะอีกคนหมดเวลา':'หมดเวลาทั้งคู่',ok:!!winner});miniStateChanged()}else publishMiniProgress();return
+ }
+ submitBlindChoice(timeoutRole,TIMEOUT_CHOICE)
+}
+const TIMEOUT_CHOICE='__timeout__';
 function renderMiniGame(){
 if(!state?.mini)return;
 if(state.gameType==='math'&&state.mini.status==='choose'){const key=state.gameType+':'+state.mini.round;if(key!==miniTimerKey){miniTimerKey=key;miniStartedAt=performance.now()}}
-if(state.gameType==='reaction'&&state.mini.status==='go'){const key=state.gameType+':'+state.mini.round;if(key!==reactionTimerKey){clearTimeout(reactionTimeoutId);reactionTimerKey=key;reactionVisible=false;reactionStartedAt=0;const round=state.mini.round;reactionTimeoutId=setTimeout(()=>{if(!state?.mini||state.gameType!=='reaction'||state.mini.status!=='go'||state.mini.round!==round)return;reactionVisible=true;reactionStartedAt=performance.now();renderMiniGame()},1400+Math.random()*2200)}}
+if(state.gameType==='reaction'&&state.mini.status==='go'){const key=state.gameType+':'+state.mini.round;if(key!==reactionTimerKey){clearTimeout(reactionTimeoutId);reactionTimerKey=key;reactionVisible=false;reactionStartedAt=0;const round=state.mini.round;const cueAt=Number(state.mini.reactionCueAt)||Date.now()+1800;reactionTimeoutId=setTimeout(()=>{if(!state?.mini||state.gameType!=='reaction'||state.mini.status!=='go'||state.mini.round!==round)return;reactionVisible=true;reactionStartedAt=performance.now();renderMiniGame()},Math.max(0,cueAt-Date.now()))}}
 $('#quizPanel').classList.add('hidden');$('#miniPanel').classList.remove('hidden');
 const info=miniInfo(),mini=state.mini,role=myRole(),mine=!!mini.submitted?.[role];
 $('#miniIcon').textContent=info.icon;$('#miniTitle').textContent=info.title;$('#miniDescription').textContent=info.description;
@@ -258,7 +326,7 @@ if(state.gameType==='ox'){
   if(mini.status==='reveal'&&mini.last){
     $('#miniBanner').textContent='จบกระดานที่ '+mini.round;
     const winner=mini.last.winner;
-    const outcome=winner==='draw'?'กระดานนี้เสมอกัน':escapeHtml(state.players[winner==='X'?0:1].name)+' ชนะกระดานนี้';
+    const outcome=mini.last.timeout?escapeHtml(state.players[winner==='X'?0:1].name)+' ชนะเพราะอีกคนหมดเวลา':winner==='draw'?'กระดานนี้เสมอกัน':escapeHtml(state.players[winner==='X'?0:1].name)+' ชนะกระดานนี้';
     html='<div class="ttt-board" role="group" aria-label="กระดาน OX">'+mini.board.map(cell=>'<div class="ttt-cell '+(cell?'occupied':'')+' '+(cell==='X'?'mark-x':'mark-o')+'">'+escapeHtml(cell)+'</div>').join('')+tttOverlayMarkup(mini.board)+'</div><p class="mini-note">'+outcome+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'กระดานถัดไป')+'</button>'
   }else{
     $('#miniBanner').textContent=mini.turn===role?'ถึงตาคุณวาง '+mark:'รอ '+(mini.turn==='host'?'X':'O')+' · '+turnName+' เลือกช่อง';
@@ -268,8 +336,8 @@ if(state.gameType==='ox'){
 if(state.gameType==='rps'){
   const submitted=mini.submitted||{};$('#miniBanner').textContent=mini.status==='reveal'?'เฉลยรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกพร้อมกันโดยไม่เห็นคำตอบของอีกคน';
   if(mini.status==='reveal'&&mini.last){
-    const labels={rock:'ค้อน',paper:'กระดาษ',scissors:'กรรไกร'},winner=mini.last.winner;
-    html='<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+labels[mini.last.host]+'</strong></div><span>VS</span><div><small>'+guestName+'</small><strong>'+labels[mini.last.guest]+'</strong></div></div><p class="mini-outcome">'+(winner?escapeHtml(state.players[winner==='host'?0:1].name)+' ชนะรอบนี้':'เสมอกันรอบนี้')+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
+    const labels={rock:'ค้อน',paper:'กระดาษ',scissors:'กรรไกร'},winner=mini.last.winner,aLabel=mini.last.host===TIMEOUT_CHOICE?'หมดเวลา':labels[mini.last.host],bLabel=mini.last.guest===TIMEOUT_CHOICE?'หมดเวลา':labels[mini.last.guest];
+    html='<div class="mini-reveal-box"><div class="secret-picks"><div><small>'+hostName+'</small><strong>'+aLabel+'</strong></div><span>VS</span><div><small>'+guestName+'</small><strong>'+bLabel+'</strong></div></div><p class="mini-outcome">'+(winner?escapeHtml(state.players[winner==='host'?0:1].name)+' ชนะรอบนี้':'เสมอกันรอบนี้')+'</p><button type="button" class="primary mini-next" data-mini-next>'+(mini.round>=mini.maxRounds?'ดูผลการแข่งขัน':'รอบถัดไป')+'</button></div>'
   }else html='<div class="rps-choices">'+[['rock','✊','ค้อน'],['paper','✋','กระดาษ'],['scissors','✌️','กรรไกร']].map(([value,icon,label])=>'<button type="button" class="rps-choice" data-rps="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><span>'+icon+'</span><strong>'+label+'</strong></button>').join('')+'</div><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>'
 }
 
@@ -284,7 +352,7 @@ if(state.gameType==='reaction'&&mini.status!=='reveal'){
   }
 }
 
-if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType)&&(state.gameType!=='reaction'||mini.status==='reveal')){
+if(['sync','target','split','high','emoji','risk','reaction',...challengeGameTypes].includes(state.gameType)&&(state.gameType!=='reaction'||mini.status==='reveal')){
   const choices=miniOptions(state.gameType),submitted=mini.submitted||{},syncPrompt=state.gameType==='sync'?syncPromptBank[mini.syncQuestion??0]:null,emojiPuzzle=state.gameType==='emoji'?emojiPuzzleBank[mini.emojiQuestion??0]:null,challenge=mini.challenge||null;
   $('#miniBanner').textContent=mini.status==='reveal'?'เปิดผลรอบนี้แล้ว':mine?'ส่งคำตอบลับแล้ว · รออีกคนเลือก':'เลือกคำตอบของคุณแบบลับ';
   if(mini.status==='reveal'&&mini.last){
@@ -292,7 +360,7 @@ if(['sync','target','split','high','emoji','math','logic','word','code','pattern
     let outcome='เสมอกันรอบนี้';
     if(state.gameType==='sync')outcome=mini.last.host===mini.last.guest?'ใจตรงกัน! ได้คนละ 1 แต้ม':'คำตอบไม่เหมือนกัน รอบนี้ไม่มีคะแนน';
     else if(state.gameType==='split')outcome=a==='🤝 แบ่งกัน'&&b==='🤝 แบ่งกัน'?'แบ่งกันคนละ 1 แต้ม':a==='💎 เก็บไว้'&&b==='💎 เก็บไว้'?'ทั้งคู่เก็บไว้ · ไม่มีใครได้แต้ม':(a==='💎 เก็บไว้'?hostName:guestName)+' เก็บได้ 2 แต้ม · '+(a==='🤝 แบ่งกัน'?hostName:guestName)+' ได้ 0 แต้ม';
-    else if(state.gameType==='emoji'||['math','logic','word','code','pattern'].includes(state.gameType))outcome=points.host&&points.guest?'ถูกทั้งคู่ · ได้คนละ 1 แต้ม':points.host?hostName+' ตอบถูก · ได้ 1 แต้ม':points.guest?guestName+' ตอบถูก · ได้ 1 แต้ม':'รอบนี้ยังไม่มีใครตอบถูก';
+    else if(state.gameType==='emoji'||isChallengeGame(state.gameType))outcome=points.host&&points.guest?'ถูกทั้งคู่ · ได้คนละ 1 แต้ม':points.host?hostName+' ตอบถูก · ได้ 1 แต้ม':points.guest?guestName+' ตอบถูก · ได้ 1 แต้ม':'รอบนี้ยังไม่มีใครตอบถูก';
     else if(state.gameType==='risk')outcome=mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะการประมูล · ได้ '+points[mini.last.winner]+' แต้ม':a===b?'เดิมพันเลขซ้ำ · ไม่มีใครได้แต้ม':'ไม่มีผู้ชนะ';
     else if(state.gameType==='reaction')outcome=mini.last.winner?escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ไวกว่า · ได้ 1 แต้ม':'แตะพร้อมกันมาก · เสมอกันรอบนี้';
     else if(mini.last.winner)outcome=escapeHtml(state.players[mini.last.winner==='host'?0:1].name)+' ชนะรอบนี้';
@@ -309,16 +377,17 @@ if(['sync','target','split','high','emoji','math','logic','word','code','pattern
     if(state.gameType==='high')help='เลขแต่ละตัวชนะ 2 ตัวถัดไปในวงจร และแพ้ 2 ตัวก่อนหน้า';
     if(state.gameType==='split')help='แบ่ง/แบ่ง = คนละ 1 · เก็บ/แบ่ง = คนเก็บได้ 2 · เก็บ/เก็บ = 0 ทั้งคู่';
     if(state.gameType==='risk')help='เลือกเดิมพัน 1–5 · เลขสูงกว่าชนะ แต่ได้แต้ม 1–4 ตามเลขที่ใช้ · เลขซ้ำได้ 0';
-    if(state.gameType==='emoji')help='มีสำนวนไทย 500 ข้อ · สุ่มไม่ซ้ำในเกมนี้';
+    if(state.gameType==='emoji')help='พิมพ์สำนวนให้ตรงเอง · ไม่มีตัวเลือกช่วยเดา · มีเวลารอบละ 75 วินาที';
     if(challenge)help=state.gameType==='math'?'คิดให้ไว · ตอบถูกและเร็วกว่าได้แต้ม · ถ้าความเร็วใกล้กันได้คนละ 1':'เลือกคำตอบแบบลับ · ตอบถูกได้ 1 แต้ม';
-    html=promptHtml+'<div class="blind-choices '+gridClass+'">'+choices.map(([value,label])=>'<button type="button" class="blind-choice" data-choice="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><strong>'+escapeHtml(label)+'</strong></button>').join('')+'</div><p class="mini-note">'+help+'</p><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>';
+     const answerControl=state.gameType==='emoji'?'<form class="emoji-answer-form" data-emoji-form><input id="emojiAnswer" maxlength="80" autocomplete="off" autocapitalize="off" placeholder="พิมพ์คำตอบของคุณ" '+(mine||!conn?.open?'disabled':'')+'><button class="primary" type="submit" '+(mine||!conn?.open?'disabled':'')+'>'+(mine?'ส่งแล้ว':'ส่งคำตอบ')+'</button></form>':'<div class="blind-choices '+gridClass+'">'+choices.map(([value,label])=>'<button type="button" class="blind-choice" data-choice="'+value+'" '+(mine||!conn?.open?'disabled':'')+'><strong>'+escapeHtml(label)+'</strong></button>').join('')+'</div>';
+     html=promptHtml+answerControl+'<p class="mini-note">'+help+'</p><p class="mini-progress">'+hostName+' '+(submitted.host?'✓ ส่งแล้ว':'กำลังเลือก')+' · '+guestName+' '+(submitted.guest?'✓ ส่งแล้ว':'กำลังเลือก')+'</p>';
   }
 }
-$('#miniContent').innerHTML=html;saveSession()
+$('#miniContent').innerHTML=html;const emojiInput=$('#emojiAnswer');if(emojiInput)emojiInput.value=emojiDraft;startMiniClock();saveSession()
 }
 
 function publishMiniProgress(){if(!isHost||!state?.mini)return;send('MINI_PROGRESS',{gameType:state.gameType,round:state.mini.round,submitted:state.mini.submitted});renderMiniGame()}
-function miniStateChanged(){if(state.phase==='finished'){finish();return}send('MINI_STATE',{state});renderMiniGame()}
+function miniStateChanged(){if(state.phase==='finished'){finish();return}ensureMiniDeadline();send('MINI_STATE',{state:guestSnapshot()});renderMiniGame()}
 function finishMini(){if(!isHost||state.phase==='finished')return;state.phase='finished';send('FINISH',{state});finish()}
 function tttWinningLine(board){const lines=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];return lines.find(([a,b,c])=>board[a]&&board[a]===board[b]&&board[a]===board[c])||null}
 function tttWinner(board){const line=tttWinningLine(board);return line?board[line[0]]:board.every(Boolean)?'draw':null}
@@ -350,7 +419,7 @@ if(winner){
   else{const winnerRole=winner==='X'?'host':'guest';state.score[winnerRole]++;state.history.push({kind:'mini',question:'เกม OX · กระดาน '+state.mini.round,detail:'ผู้ชนะ: '+state.players[winnerRole==='host'?0:1].name,badge:'ชนะ',ok:true})}
   miniStateChanged();return
 }
-state.mini.turn=role==='host'?'guest':'host';send('MINI_STATE',{state});renderMiniGame()
+state.mini.turn=role==='host'?'guest':'host';ensureMiniDeadline();send('MINI_STATE',{state:guestSnapshot()});renderMiniGame()
 }
 function submitMiniChoice(role,choice){
 if(!isHost||state.gameType!=='rps'||state.phase!=='mini'||state.mini.status!=='choose'||state.mini.submitted[role]||!['rock','paper','scissors'].includes(choice))return;
@@ -374,40 +443,46 @@ const syncPromptBank=[
 {question:'อยากเก็บความทรงจำแบบไหนเพิ่ม?',options:[['album','📔 อัลบั้มรูป'],['video','🎥 คลิปด้วยกัน'],['letters','💌 จดหมาย'],['trip','🗺️ ทริปใหม่']]}
 ];
 function miniOptions(type){
-if(type==='sync')return syncPromptBank[state.mini.syncQuestion??0].options;
-if(type==='reaction')return state.mini.status==='ready'?[['ready','พร้อม']]:[['tap','แตะ']];
-if(type==='emoji')return emojiPuzzleBank[state.mini.emojiQuestion??0].options.map((label,index)=>[String(index),label]);
-if(type==='split')return[['share','🤝 แบ่งกัน'],['keep','💎 เก็บไว้']];
-if(type==='high'||type==='risk')return Array.from({length:5},(_,i)=>[String(i+1),type==='risk'?(i+1)+' แต้ม':String(i+1)]);
-if(type==='target')return Array.from({length:10},(_,i)=>[String(i+1),String(i+1)]);
-if(['math','logic','word','code','pattern'].includes(type))return(state.mini.challenge?.options||[]).map((label,index)=>[String(index),label]);
-return[]
+ if(type==='sync')return syncPromptBank[state.mini.syncQuestion??0].options;
+ if(type==='reaction')return state.mini.status==='ready'?[['ready','พร้อม']]:[['tap','แตะ']];
+ if(type==='emoji')return[];
+ if(type==='split')return[['share','🤝 แบ่งกัน'],['keep','💎 เก็บไว้']];
+ if(type==='high'||type==='risk')return Array.from({length:5},(_,i)=>[String(i+1),type==='risk'?(i+1)+' แต้ม':String(i+1)]);
+ if(type==='target')return Array.from({length:10},(_,i)=>[String(i+1),String(i+1)]);
+ if(isChallengeGame(type))return(state.mini.challenge?.options||[]).map((label,index)=>[String(index),label]);
+ return[]
 }
+function normalizeEmojiAnswer(value){return String(value??'').toLocaleLowerCase('th').replace(/[\s\p{P}\p{S}]/gu,'').trim()}
 function submitBlindChoice(role,choice,timeMs=0){
-const reaction=state.gameType==='reaction';
-if(!isHost||!['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType)||state.phase!=='mini'||(reaction?!['ready','go'].includes(state.mini.status):state.mini.status!=='choose')||state.mini.submitted[role])return;
-const allowed=miniOptions(state.gameType).map(([value])=>String(value));if(!allowed.includes(String(choice)))return;
-choice=['sync','split','reaction'].includes(state.gameType)?String(choice):Number(choice);state.mini.submissions[role]=choice;state.mini.submitted[role]=true;if(state.gameType==='math'||(reaction&&choice==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes[role]=Math.max(0,Number(timeMs)||0)}
-if(reaction&&state.mini.status==='ready'){
-  if(state.mini.submitted.host&&state.mini.submitted.guest){state.mini.status='go';state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.answerTimes={host:null,guest:null};miniStateChanged()}
-  else publishMiniProgress();
-  return
-}
-if(!state.mini.submitted.host||!state.mini.submitted.guest){publishMiniProgress();return}
-const a=state.mini.submissions.host,b=state.mini.submissions.guest;let winner=null,points={host:0,guest:0};
-if(state.gameType==='sync'){if(a===b)points={host:1,guest:1}}
-if(state.gameType==='target'){const da=Math.abs(a-state.mini.target),db=Math.abs(b-state.mini.target);winner=da===db?null:da<db?'host':'guest';if(winner)points[winner]=1}
-if(state.gameType==='emoji'){const correct=emojiPuzzleBank[state.mini.emojiQuestion].answerIndex;points={host:Number(a===correct),guest:Number(b===correct)}}
-if(state.gameType==='math'){const correct=state.mini.challenge.answer,hostCorrect=a===correct,guestCorrect=b===correct,times=state.mini.answerTimes||{host:0,guest:0};if(hostCorrect&&guestCorrect){if(Math.abs(times.host-times.guest)<=250)points={host:1,guest:1};else{winner=times.host<times.guest?'host':'guest';points[winner]=1}}else if(hostCorrect){winner='host';points.host=1}else if(guestCorrect){winner='guest';points.guest=1}}
-if(['logic','word','code','pattern'].includes(state.gameType)){const correct=state.mini.challenge.answer;points={host:Number(a===correct),guest:Number(b===correct)}}
-if(state.gameType==='high'){const difference=(a-b+5)%5;if(difference===1||difference===2){winner='host';points.host=1}else if(difference===3||difference===4){winner='guest';points.guest=1}}
-if(state.gameType==='risk'&&a!==b){winner=a>b?'host':'guest';points[winner]=6-Math.max(a,b)}
-if(reaction){const times=state.mini.answerTimes||{};winner=Math.abs(times.host-times.guest)<=25?null:times.host<times.guest?'host':'guest';if(winner)points[winner]=1}
-if(state.gameType==='split'){if(a==='share'&&b==='share')points={host:1,guest:1};else if(a==='keep'&&b==='share')points={host:2,guest:0};else if(a==='share'&&b==='keep')points={host:0,guest:2}}
-state.score.host+=points.host;state.score.guest+=points.guest;state.mini.last={host:a,guest:b,winner,points,...(state.gameType==='emoji'?{answer:emojiPuzzleBank[state.mini.emojiQuestion].options[emojiPuzzleBank[state.mini.emojiQuestion].answerIndex],hint:emojiPuzzleBank[state.mini.emojiQuestion].hint}:{})};state.mini.status='reveal';
-const labels=Object.fromEntries(miniOptions(state.gameType)),label=value=>labels[String(value)]||String(value);
-let badge=winner?state.players[winner==='host'?0:1].name+' ชนะ':points.host||points.guest?'ได้คะแนน':'เสมอ';if(state.gameType==='sync')badge=a===b?'ใจตรงกัน':'คำตอบต่างกัน';if(state.gameType==='split')badge='+'+points.host+' : +'+points.guest;if(state.gameType==='emoji'||['math','logic','word','code','pattern'].includes(state.gameType))badge=points.host&&points.guest?'ถูกทั้งคู่':points.host?state.players[0].name+' ตอบถูก':points.guest?state.players[1].name+' ตอบถูก':'ยังไม่มีใครตอบถูก';if(state.gameType==='math'&&winner)badge=state.players[winner==='host'?0:1].name+' ตอบถูกเร็วกว่า';if(state.gameType==='risk')badge=winner?state.players[winner==='host'?0:1].name+' ได้ '+points[winner]+' แต้ม':a===b?'เดิมพันซ้ำ':'ไม่มีผู้ชนะ';
-const reactionTimes=state.mini.answerTimes||{};state.history.push({kind:'mini',question:miniInfo().title+(state.gameType==='sync'?' · '+syncPromptBank[state.mini.syncQuestion??0].question:state.gameType==='emoji'?' · '+emojiPuzzleBank[state.mini.emojiQuestion??0].clue:state.mini.challenge?' · '+state.mini.challenge.prompt:'')+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+(reaction&&Number.isFinite(reactionTimes.host)?' ('+(reactionTimes.host/1000).toFixed(2)+' วิ)':'')+' · '+state.players[1].name+': '+label(b)+(reaction&&Number.isFinite(reactionTimes.guest)?' ('+(reactionTimes.guest/1000).toFixed(2)+' วิ)':''),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
+ const reaction=state.gameType==='reaction',type=state.gameType,timeout=choice===TIMEOUT_CHOICE;
+ if(!isHost||!['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction','odd','detective','algebra','probability'].includes(type)||state.phase!=='mini'||(reaction?!['ready','go'].includes(state.mini.status):state.mini.status!=='choose')||state.mini.submitted[role])return;
+ const allowed=miniOptions(type).map(([value])=>String(value));
+ if(timeout){if(!isHost)return}else if(type==='emoji'){choice=String(choice).trim();if(!choice||choice.length>80)return}else if(!allowed.includes(String(choice)))return;
+ choice=timeout?TIMEOUT_CHOICE:['sync','split','reaction','emoji'].includes(type)?String(choice):Number(choice);
+ state.mini.submissions[role]=choice;state.mini.submitted[role]=true;
+ if(type==='math'||(reaction&&choice==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes[role]=timeout?null:Math.max(0,Number(timeMs)||0)}
+ if(reaction&&state.mini.status==='ready'){
+   if(state.mini.submitted.host&&state.mini.submitted.guest){
+     if(state.mini.submissions.host===TIMEOUT_CHOICE||state.mini.submissions.guest===TIMEOUT_CHOICE){const a=state.mini.submissions.host,b=state.mini.submissions.guest;state.mini.last={host:a,guest:b,winner:null,points:{host:0,guest:0}};state.mini.status='reveal';state.history.push({kind:'mini',question:'วัดความไว · รอบ '+state.mini.round,detail:state.players[0].name+': '+(a===TIMEOUT_CHOICE?'หมดเวลา':'พร้อม')+' · '+state.players[1].name+': '+(b===TIMEOUT_CHOICE?'หมดเวลา':'พร้อม'),badge:'หมดเวลาเตรียมตัว',ok:false});miniStateChanged()}
+     else{state.mini.status='go';state.mini.reactionCueAt=Date.now()+1400+Math.random()*2200;state.mini.submissions={host:null,guest:null};state.mini.submitted={host:false,guest:false};state.mini.answerTimes={host:null,guest:null};state.mini.deadlineKey='';state.mini.deadlineAt=null;miniStateChanged()}
+   }else publishMiniProgress();return
+ }
+ if(!state.mini.submitted.host||!state.mini.submitted.guest){publishMiniProgress();return}
+ const a=state.mini.submissions.host,b=state.mini.submissions.guest;let winner=null,points={host:0,guest:0};
+ if(type==='sync'){if(a!==TIMEOUT_CHOICE&&b!==TIMEOUT_CHOICE&&a===b)points={host:1,guest:1}}
+ if(type==='target'){const da=Number.isFinite(a)?Math.abs(a-state.mini.target):Infinity,db=Number.isFinite(b)?Math.abs(b-state.mini.target):Infinity;winner=da===db?null:da<db?'host':'guest';if(winner&&Number.isFinite(winner==='host'?a:b))points[winner]=1}
+ if(type==='emoji'){const correct=emojiPuzzleBank[state.mini.emojiQuestion].answer;points={host:Number(a!==TIMEOUT_CHOICE&&normalizeEmojiAnswer(a)===normalizeEmojiAnswer(correct)),guest:Number(b!==TIMEOUT_CHOICE&&normalizeEmojiAnswer(b)===normalizeEmojiAnswer(correct))}}
+ if(type==='math'){const correct=state.mini.challenge.answer,hostCorrect=a!==TIMEOUT_CHOICE&&a===correct,guestCorrect=b!==TIMEOUT_CHOICE&&b===correct,times=state.mini.answerTimes||{host:null,guest:null};if(hostCorrect&&guestCorrect){if(Math.abs(times.host-times.guest)<=250)points={host:1,guest:1};else{winner=times.host<times.guest?'host':'guest';points[winner]=1}}else if(hostCorrect){winner='host';points.host=1}else if(guestCorrect){winner='guest';points.guest=1}}
+ if(isChallengeGame(type)&&type!=='math'){const correct=state.mini.challenge.answer;points={host:Number(a!==TIMEOUT_CHOICE&&a===correct),guest:Number(b!==TIMEOUT_CHOICE&&b===correct)}}
+ if(type==='high'&&Number.isFinite(a)&&Number.isFinite(b)){const difference=(a-b+5)%5;if(difference===1||difference===2){winner='host';points.host=1}else if(difference===3||difference===4){winner='guest';points.guest=1}}
+ if(type==='risk'&&Number.isFinite(a)&&Number.isFinite(b)&&a!==b){winner=a>b?'host':'guest';points[winner]=6-Math.max(a,b)}
+ if(reaction){const times=state.mini.answerTimes||{},hostTap=Number.isFinite(times.host),guestTap=Number.isFinite(times.guest);if(hostTap&&!guestTap){winner='host';points.host=1}else if(guestTap&&!hostTap){winner='guest';points.guest=1}else if(hostTap&&guestTap&&Math.abs(times.host-times.guest)>25){winner=times.host<times.guest?'host':'guest';points[winner]=1}}
+ if(type==='split'&&a!==TIMEOUT_CHOICE&&b!==TIMEOUT_CHOICE){if(a==='share'&&b==='share')points={host:1,guest:1};else if(a==='keep'&&b==='share')points={host:2,guest:0};else if(a==='share'&&b==='keep')points={host:0,guest:2}}
+ state.score.host+=points.host;state.score.guest+=points.guest;
+ state.mini.last={host:a,guest:b,winner,points,...(type==='emoji'?{answer:emojiPuzzleBank[state.mini.emojiQuestion].answer,hint:emojiPuzzleBank[state.mini.emojiQuestion].hint}:{})};state.mini.status='reveal';state.mini.deadlineAt=null;
+ const labels=Object.fromEntries(miniOptions(type)),label=value=>value===TIMEOUT_CHOICE?'หมดเวลา':labels[String(value)]||String(value);
+ let badge=winner?state.players[winner==='host'?0:1].name+' ชนะ':points.host||points.guest?'ได้คะแนน':'เสมอ';if(type==='sync')badge=a===b&&a!==TIMEOUT_CHOICE?'ใจตรงกัน':'คำตอบต่างกัน';if(type==='split')badge='+'+points.host+' : +'+points.guest;if(type==='emoji'||isChallengeGame(type))badge=points.host&&points.guest?'ถูกทั้งคู่':points.host?state.players[0].name+' ตอบถูก':points.guest?state.players[1].name+' ตอบถูก':'ยังไม่มีใครตอบถูก';if(type==='math'&&winner)badge=state.players[winner==='host'?0:1].name+' ตอบถูกเร็วกว่า';if(type==='risk')badge=winner?state.players[winner==='host'?0:1].name+' ได้ '+points[winner]+' แต้ม':a===b?'เดิมพันซ้ำ':'ไม่มีผู้ชนะ';if(reaction&&!winner)badge=points.host||points.guest?'มีคนแตะทันเวลา':'หมดเวลา · ไม่มีคะแนน';
+ const reactionTimes=state.mini.answerTimes||{};state.history.push({kind:'mini',question:miniInfo().title+(type==='sync'?' · '+syncPromptBank[state.mini.syncQuestion??0].question:type==='emoji'?' · '+emojiPuzzleBank[state.mini.emojiQuestion??0].clue:state.mini.challenge?' · '+state.mini.challenge.prompt:'')+' · รอบ '+state.mini.round,detail:state.players[0].name+': '+label(a)+(reaction&&Number.isFinite(reactionTimes.host)?' ('+(reactionTimes.host/1000).toFixed(2)+' วิ)':'')+' · '+state.players[1].name+': '+label(b)+(reaction&&Number.isFinite(reactionTimes.guest)?' ('+(reactionTimes.guest/1000).toFixed(2)+' วิ':''),badge,ok:!!winner||!!(points.host||points.guest)});miniStateChanged()
 }
 function advanceMini(){
 if(!isHost||state.phase!=='mini'||state.mini.status!=='reveal')return;
@@ -416,35 +491,37 @@ state.mini.round++;state.mini.submissions={host:null,guest:null};state.mini.subm
 if(state.gameType==='emoji')state.mini.emojiQuestion=state.mini.emojiOrder[state.mini.round-1];
 if(state.gameType==='ox'){state.mini.board=Array(9).fill('');state.mini.winner=null;state.mini.turn=state.mini.round%2===0?'guest':'host'}
 if(state.gameType==='target')state.mini.target=Math.floor(Math.random()*10)+1;
-if(['math','logic','word','code','pattern'].includes(state.gameType)){const challenge=createUniqueChallenge(state.gameType,state.mini.usedChallenges||[]);state.mini.usedChallenges=state.mini.usedChallenges||[];state.mini.usedChallenges.push(challenge.id);state.mini.challenge=challenge}
-send('MINI_STATE',{state:guestSnapshot()});renderMiniGame()
+if(isChallengeGame(state.gameType)){const challenge=createUniqueChallenge(state.gameType,state.mini.usedChallenges||[]);state.mini.usedChallenges=state.mini.usedChallenges||[];state.mini.usedChallenges.push(challenge.id);state.mini.challenge=challenge}
+ensureMiniDeadline();send('MINI_STATE',{state:guestSnapshot()});renderMiniGame()
 }
+$('#miniContent').addEventListener('submit',event=>{const form=event.target.closest('[data-emoji-form]');if(!form)return;event.preventDefault();const value=String($('#emojiAnswer')?.value||'').trim();if(!value)return toast('พิมพ์คำตอบก่อนนะ');if(state.mini.submitted[myRole()])return;emojiDraft='';if(isHost)submitBlindChoice('host',value);else{state.mini.submissions.guest=value;state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:'emoji',round:state.mini.round,choice:value});renderMiniGame()} });
+$('#miniContent').addEventListener('input',event=>{if(event.target.id==='emojiAnswer')emojiDraft=event.target.value});
 $('#miniContent').addEventListener('click',event=>{
 const ttt=event.target.closest('[data-ttt]'),memory=event.target.closest('[data-memory]'),memoryPass=event.target.closest('[data-memory-pass]'),rps=event.target.closest('[data-rps]'),choice=event.target.closest('[data-choice]');
 if(memory){const index=Number(memory.dataset.memory);if(isHost)handleMemoryFlip('host',index);else send('MINI_ACTION',{gameType:'memory',index});return}
 if(memoryPass){if(isHost)handleMemoryPass('host');else send('MINI_ACTION',{gameType:'memory',action:'pass'});return}
 if(ttt){const index=Number(ttt.dataset.ttt);if(isHost)handleTttMove('host',index);else send('MINI_ACTION',{gameType:'ox',index});return}
 if(rps){const value=rps.dataset.rps;if(isHost)submitMiniChoice('host',value);else{if(state.mini.status!=='choose'||state.mini.submitted.guest)return;state.mini.submissions.guest=value;state.mini.submitted.guest=true;send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:value});renderMiniGame()}return}
-if(choice){const value=choice.dataset.choice,timeMs=state.gameType==='math'?Math.max(0,Math.round(performance.now()-miniStartedAt)):state.gameType==='reaction'&&value==='tap'?Math.max(0,Math.round(performance.now()-reactionStartedAt)):0;if(isHost)submitBlindChoice('host',value,timeMs);else{const canSubmit=state.gameType==='reaction'?(value==='ready'?state.mini.status==='ready':state.mini.status==='go'&&reactionVisible):state.mini.status==='choose';if(!canSubmit||state.mini.submitted.guest)return;state.mini.submissions.guest=['sync','split','reaction'].includes(state.gameType)?value:Number(value);state.mini.submitted.guest=true;if(state.gameType==='math'||(state.gameType==='reaction'&&value==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes.guest=timeMs}send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:value,timeMs});renderMiniGame()}return}
+if(choice){const value=choice.dataset.choice,timeMs=state.gameType==='math'?Math.max(0,Math.round(performance.now()-miniStartedAt)):state.gameType==='reaction'&&value==='tap'?Math.max(0,Math.round(performance.now()-reactionStartedAt)):0;if(isHost)submitBlindChoice('host',value,timeMs);else{const canSubmit=state.gameType==='reaction'?(value==='ready'?state.mini.status==='ready':state.mini.status==='go'&&reactionVisible):state.mini.status==='choose';if(!canSubmit||state.mini.submitted.guest)return;state.mini.submissions.guest=['sync','split','reaction','emoji'].includes(state.gameType)?value:Number(value);state.mini.submitted.guest=true;if(state.gameType==='math'||(state.gameType==='reaction'&&value==='tap')){state.mini.answerTimes=state.mini.answerTimes||{host:null,guest:null};state.mini.answerTimes.guest=timeMs}send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:value,timeMs});renderMiniGame()}return}
 
 if(event.target.closest('[data-mini-next]')){if(isHost)advanceMini();else send('MINI_NEXT_REQUEST',{round:state.mini.round})}
 });
 
-function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;miniTimerKey='';reactionTimerKey='';clearTimeout(reactionTimeoutId);reactionVisible=false;state.index=0;state.score={host:0,guest:0};state.history=[];if(state.gameType==='quiz'){state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion()}else{state.phase='mini';state.mini=createMiniState(state.gameType);show('game');renderMiniGame()}send('START',{state:guestSnapshot()})}
+function startGame(){if(!isHost||!conn?.open||state.phase!=='lobby'||!state.players.every(p=>p.name&&p.ready))return;miniTimerKey='';miniClockKey='';clearInterval(miniClockId);emojiDraft='';reactionTimerKey='';clearTimeout(reactionTimeoutId);reactionVisible=false;state.index=0;state.score={host:0,guest:0};state.history=[];if(state.gameType==='quiz'){state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';show('game');renderQuestion()}else{state.phase='mini';state.mini=createMiniState(state.gameType);show('game');renderMiniGame()}send('START',{state:guestSnapshot()})}
 function next(){if(state.phase!=='reveal')return;if(!isHost){send('NEXT_REQUEST');return}if(state.index+1>=state.rounds){state.phase='finished';send('FINISH',{state});finish();return}state.index++;state.phase=state.answerMode==='simultaneous'?'simultaneous':'choose';renderQuestion();send('NEXT',{state})}
 function startRematch(){
 if(!isHost||!state?.players?.[1]?.name||!conn?.open)return toast('อีกคนหลุดจากห้อง จึงเริ่มเกมใหม่ไม่ได้');
-const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;
+const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;selectedMathDifficulty=state.mathDifficulty||selectedMathDifficulty;
 other=guest.name;state=makeState();state.players[1].token=guestToken;state.players.forEach(player=>player.ready=true);state.phase='lobby';startGame();toast('เริ่มเกมใหม่แล้ว · คะแนนเริ่มจากศูนย์')
 }
 function returnToLobby(){
 if(!isHost||!state?.players?.[1]?.name||!conn?.open)return toast('ต้องเชื่อมต่อกับอีกคนก่อนจึงจะเลือกเกมใหม่ได้');
-const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;
+const guest=state.players[1],guestToken=guest.token;selectedGame=state.gameType||selectedGame;selectedCategories=[...(state.categories||selectedCategories)];selectedRounds=state.rounds||8;selectedMode=state.mode||selectedMode;selectedAnswerMode=state.answerMode||selectedAnswerMode;selectedMathDifficulty=state.mathDifficulty||selectedMathDifficulty;
 other=guest.name;state=makeState();state.players[1].token=guestToken;show('lobby');updateLobby();send('LOBBY',{state});toast('กลับไปเลือกเกมได้เลย')
 }
 function requestGameSelection(){if(!state||state.phase==='lobby')return;if(isHost)returnToLobby();else if(conn?.open){send('GAME_SELECT_REQUEST');toast('ส่งคำขอกลับไปเลือกเกมแล้ว')}else toast('การเชื่อมต่อขาดหาย กรุณากลับเข้าห้องใหม่')
 }
-function restoreSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
+function restoreSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startQuizTimer()}
 function setCreatePending(pending){hostCreatePending=pending;const button=$('#createBtn');if(!button)return;button.disabled=pending;button.setAttribute('aria-busy',String(pending));button.textContent=pending?'กำลังสร้างห้อง…':'＋ สร้างห้อง'}
 function failHostCreate(message){if(hostCreateTimer){clearTimeout(hostCreateTimer);hostCreateTimer=null}setCreatePending(false);destroyPeer();setConn(false);show('home');toast(message)}
 function setupHost(resume=false){
@@ -471,7 +548,7 @@ if(state.answerMode==='simultaneous'&&state.phase!=='reveal'&&state.phase!=='fin
 state.answers=blankAnswers();state.simSubmitted=state.simSubmitted||blankSubmitted();
 if(localAnswers){state.answers.guest={self:localAnswers.self??null,guess:localAnswers.guess??null};for(const field of ['self','guess'])if(Number.isInteger(localAnswers[field])){state.simSubmitted.guest[field]=true;if(!snapshot.simSubmitted?.guest?.[field])send('SIM_ANSWER',{index:state.index,field,n:localAnswers[field]})}}
 }else if(state.phase==='guess'&&!Number.isInteger(state.guess)&&Number.isInteger(localGuess))state.guess=localGuess;
-if(!isHost&&state.phase==='mini'&&localMiniSecret!==null&&localMiniSecret!==undefined&&state.mini?.status!=='reveal'){state.mini.submissions.guest=localMiniSecret;state.mini.submitted.guest=true;if(state.gameType==='rps')send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:localMiniSecret});if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(state.gameType))send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:localMiniSecret,timeMs:localMiniTime})}
+if(!isHost&&state.phase==='mini'&&localMiniSecret!==null&&localMiniSecret!==undefined&&state.mini?.status!=='reveal'){state.mini.submissions.guest=localMiniSecret;state.mini.submitted.guest=true;if(state.gameType==='rps')send('MINI_SUBMIT',{gameType:'rps',round:state.mini.round,choice:localMiniSecret});if(['sync','target','split','high','emoji','risk','reaction',...challengeGameTypes].includes(state.gameType))send('MINI_SUBMIT',{gameType:state.gameType,round:state.mini.round,choice:localMiniSecret,timeMs:localMiniTime})}
 other=state.players?.[0]?.name||other;resumePending=false;if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}restoreSavedView();saveSession()
 }
 function handle(message){
@@ -481,25 +558,25 @@ if(message.type==='ROOM_FULL'&&!isHost){toast('ห้องนี้มีผู
 if(message.type==='SYNC'&&!isHost&&message.state){resumeFromSnapshot(message.state);return}
 if(message.type==='LOBBY'&&!isHost&&message.state){state=message.state;other=state.players[0].name;show('lobby');updateLobby();saveSession();return}
 if(message.type==='READY'&&isHost&&message.role==='guest'&&state.phase==='lobby'){const guest=state.players.find(p=>p.id==='guest');if(guest)guest.ready=true;updateLobby();send('LOBBY',{state});return}
-if(message.type==='START'&&!isHost&&message.state){state=message.state;show('game');if(state.gameType&&state.gameType!=='quiz')renderMiniGame();else renderQuestion();return}
-if(message.type==='ACTUAL'&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4&&state.answerMode!=='simultaneous'&&state.phase==='choose'&&message.role===state.chooser){state.actual=message.n;state.phase='guess';configureClassicPhase();if(state.chooser!==myRole()){startGuessTimer();toast('อีกคนเลือกแล้ว · ถึงตาคุณทาย')}saveSession();return}
+if(message.type==='START'&&!isHost&&message.state){state=message.state;show('game');if(state.gameType&&state.gameType!=='quiz')renderMiniGame();else renderQuestion(true);return}
+if(message.type==='ACTUAL'&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4&&state.answerMode!=='simultaneous'&&state.phase==='choose'&&message.role===state.chooser){state.actual=message.n;state.phase='guess';state.deadlineAt=Number(message.deadlineAt)||Date.now()+60000;state.deadlineKey=state.index+':guess:'+state.answerMode;configureClassicPhase();startQuizTimer();if(state.chooser!==myRole()){toast('อีกคนเลือกแล้ว · ถึงตาคุณทาย')}saveSession();return}
 if(message.type==='GUESS'&&isHost&&state.phase==='guess'){state.guess=Number.isInteger(message.n)?message.n:null;reveal();return}
-if(message.type==='REVEAL'&&!isHost){clearInterval(timerId);state.actual=message.actual;state.guess=Number.isInteger(message.guess)?message.guess:null;state.score=message.score;state.phase='reveal';const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'turns',actual:message.actual,guess:message.guess,ok:!!message.ok,chooser:state.chooser};state.history[state.index]=entry;renderReveal(entry);saveSession();return}
+if(message.type==='REVEAL'&&!isHost){clearInterval(timerId);state.deadlineAt=null;state.actual=message.actual;state.guess=Number.isInteger(message.guess)?message.guess:null;state.score=message.score;state.phase='reveal';const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'turns',actual:message.actual,guess:message.guess,ok:!!message.ok,chooser:state.chooser};state.history[state.index]=entry;renderReveal(entry);saveSession();return}
 if(message.type==='SIM_ANSWER'&&isHost&&state.answerMode==='simultaneous'&&state.phase==='simultaneous'&&message.index===state.index&&['self','guess'].includes(message.field)&&Number.isInteger(message.n)&&message.n>=1&&message.n<=4){if(!Number.isInteger(state.answers.guest[message.field])){state.answers.guest[message.field]=message.n;state.simSubmitted.guest[message.field]=true;publishSimProgress()}return}
 if(message.type==='SIM_PROGRESS'&&!isHost&&state.answerMode==='simultaneous'&&message.index===state.index){state.simSubmitted=message.submitted||state.simSubmitted;renderSimultaneous();saveSession();return}
-if(message.type==='SIM_REVEAL'&&!isHost&&message.index===state.index){state.answers=message.answers;state.simSubmitted={host:{self:true,guess:true},guest:{self:true,guess:true}};state.score=message.score;const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'simultaneous',answers:message.answers,correct:message.correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);saveSession();return}
+if(message.type==='SIM_REVEAL'&&!isHost&&message.index===state.index){clearInterval(timerId);state.deadlineAt=null;state.answers=message.answers;state.simSubmitted={host:{self:true,guess:true},guest:{self:true,guess:true}};state.score=message.score;const entry={question:questionFor()[1],choices:[...questionFor()[2]],answerMode:'simultaneous',answers:message.answers,correct:message.correct};state.history[state.index]=entry;state.phase='reveal';renderReveal(entry);saveSession();return}
 if(message.type==='MINI_ACTION'&&isHost&&state.gameType==='ox'&&message.gameType==='ox'){handleTttMove('guest',Number(message.index));return}
 if(message.type==='MINI_ACTION'&&isHost&&state.gameType==='memory'&&message.gameType==='memory'){if(message.action==='pass')handleMemoryPass('guest');else handleMemoryFlip('guest',Number(message.index));return}
-if(message.type==='MINI_SUBMIT'&&isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){if(message.gameType==='rps')submitMiniChoice('guest',message.choice);if(['sync','target','split','high','emoji','math','logic','word','code','pattern','risk','reaction'].includes(message.gameType))submitBlindChoice('guest',message.choice,message.timeMs);return}
+if(message.type==='MINI_SUBMIT'&&isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){if(message.gameType==='rps')submitMiniChoice('guest',message.choice);if(['sync','target','split','high','emoji','risk','reaction',...challengeGameTypes].includes(message.gameType))submitBlindChoice('guest',message.choice,message.timeMs);return}
 if(message.type==='MINI_PROGRESS'&&!isHost&&message.gameType===state.gameType&&Number(message.round)===state.mini?.round){state.mini.submitted=message.submitted||state.mini.submitted;renderMiniGame();return}
-if(message.type==='MINI_STATE'&&!isHost&&message.state){state=message.state;if(state.phase==='finished')finish();else renderMiniGame();return}
+if(message.type==='MINI_STATE'&&!isHost&&message.state){if(state?.mini?.round!==message.state.mini?.round)emojiDraft='';state=message.state;if(state.phase==='finished')finish();else{renderMiniGame()}return}
 if(message.type==='MINI_NEXT_REQUEST'&&isHost&&state.phase==='mini'&&Number(message.round)===state.mini?.round){advanceMini();return}
 if(message.type==='NEXT_REQUEST'&&isHost){next();return}
-if(message.type==='NEXT'&&!isHost&&message.state){state=message.state;renderQuestion();return}
+if(message.type==='NEXT'&&!isHost&&message.state){state=message.state;renderQuestion(true);return}
 if(message.type==='FINISH'&&!isHost&&message.state){state=message.state;finish();return}
 if(message.type==='REMATCH_REQUEST'&&isHost&&state.phase==='finished')startRematch();if(message.type==='GAME_SELECT_REQUEST'&&isHost&&state.phase!=='lobby')returnToLobby()
 }
-function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startGuessTimer()}
+function renderSavedView(){if(!state)return;if(state.phase==='lobby'){show('lobby');updateLobby();return}if(state.phase==='finished'){finish();return}show('game');if(state.gameType&&state.gameType!=='quiz'){renderMiniGame();return}renderQuestion(true);if(state.phase==='guess'&&state.chooser!==myRole()&&!Number.isInteger(state.guess))startQuizTimer()}
 $('#answerMode').onclick=e=>{const button=e.target.closest('[data-value]');if(!button||button.disabled)return;selectedAnswerMode=button.dataset.value;updateSettingControls();if(isHost&&state?.phase==='lobby')publishLobbySettings()};
 $('#resumeBtn').onclick=()=>savedSession?.isHost?setupHost(true):setupGuest(true);
 $('#forgetSessionBtn').onclick=()=>{clearSavedSession();toast('ล้างห้องที่จำไว้แล้ว')};
@@ -509,4 +586,3 @@ $('#installBtn').onclick=async()=>{if(!installPrompt)return;installPrompt.prompt
 $('#revealNowBtn').onclick=()=>{if(state.phase==='guess'&&state.chooser!==myRole()&&Number.isInteger(state.guess)){if(isHost)reveal();else{send('GUESS',{n:state.guess});$('#revealNowBtn').disabled=true;$('#revealNowBtn').textContent='รอเฉลย…';$('#roleBanner').textContent='ส่งคำตอบแล้ว · รอเจ้าของห้องเฉลย';saveSession()}}};
 displayResume();updateLobby();
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
-

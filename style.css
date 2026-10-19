@@ -201,3 +201,24 @@ button:focus-visible,input:focus-visible{outline:2px solid #ff9cab;outline-offse
 .ttt-win-overlay .win-X{stroke:#ed6682}
 .ttt-win-overlay .win-O{stroke:#6ccfe0}
 
+.countdown-pill{display:flex;align-items:center;justify-content:center;gap:5px;min-width:70px;padding:6px 10px;border:1px solid #59404a;border-radius:99px;background:#21151b;color:#ffc0cc;font-size:11px;line-height:1;transition:color .2s,border-color .2s,background .2s}
+.countdown-pill>span{font-size:12px}.countdown-pill strong{font-size:15px;font-variant-numeric:tabular-nums}.countdown-pill small{font-size:9px;color:var(--muted)}
+.countdown-pill.urgent{border-color:#b93e50;background:#391720;color:#fff;animation:timer-pulse .8s ease-in-out infinite alternate}
+@keyframes timer-pulse{to{box-shadow:0 0 14px #ff5c7a55}}
+.math-difficulty{margin-top:15px;padding:13px;border:1px solid #2b303c;border-radius:15px;background:#10131a}
+.math-difficulty>label{display:block;margin-bottom:9px;font-size:12px;font-weight:700;color:#dce6ff}
+.difficulty-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.difficulty-seg button{min-height:42px;padding:5px 3px;border:1px solid #343c4b;border-radius:10px;background:#0b0e14;color:#b6bfce;font-size:11px;font-weight:600}
+.difficulty-seg button.selected{border-color:#82baff;background:#152236;color:#fff;box-shadow:inset 0 0 0 1px #82baff35}
+.difficulty-seg button:disabled{opacity:.9}
+.math-difficulty>small{display:block;margin-top:8px;color:var(--muted);font-size:10px;line-height:1.4}
+.game-option[data-game="odd"],.game-option[data-game="detective"]{--game-accent:#f2a2c8}
+.game-option[data-game="algebra"],.game-option[data-game="probability"]{--game-accent:#81d7ec}
+.emoji-answer-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:12px}
+.emoji-answer-form input{min-width:0;height:52px;padding:0 13px;border:1px solid var(--line);border-radius:13px;background:#0b0e14;color:var(--text);font-size:15px;outline:none}
+.emoji-answer-form input:focus{border-color:var(--accent)}
+.emoji-answer-form input::placeholder{color:#727b8b}
+.emoji-answer-form .primary{width:auto;min-width:105px;min-height:52px;padding:0 14px;white-space:nowrap}
+.emoji-answer-form input:disabled,.emoji-answer-form button:disabled{opacity:.55}
+.challenge-prompt{white-space:pre-line}
+@media(max-width:370px){.countdown-pill{min-width:59px;padding:6px 7px;gap:3px}.emoji-answer-form{grid-template-columns:minmax(0,1fr) 96px}.emoji-answer-form .primary{min-width:0;padding:0 6px;font-size:12px}.difficulty-seg{gap:4px}.difficulty-seg button{font-size:10px}}
