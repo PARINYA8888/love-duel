@@ -38,10 +38,13 @@ function makeEmojiPuzzleBank() {
       else if ([4,6,9].includes(mode)) { const shift = mode===4?1:mode===6?2:source.length-1; tokens=tokens.map((_,i)=>source[(i+shift)%source.length]); }
       if ([2,5,7,9].includes(mode) && tokens.length>2) tokens[(seedIndex+mode)%tokens.length]='❔';
       if ([3,7,8].includes(mode)) tokens.push(decoys[(seedIndex+mode)%decoys.length]);
-      const choices=[answer];
-      for (const offset of [1,11,23]) choices.push(idiomSeeds[(seedIndex+offset)%idiomSeeds.length][0]);
+
+      const symbols=new Set(source),compact=answer.replace(/\s/g,'');
+      const related=idiomSeeds.map(([candidate,candidateRaw],candidateIndex)=>{if(candidateIndex===seedIndex)return null;const candidateSymbols=new Set(candidateRaw.split(' '));let sharedSymbols=0;for(const symbol of symbols)if(candidateSymbols.has(symbol))sharedSymbols++;const other=candidate.replace(/\s/g,'');let longest=0;for(let start=0;start<compact.length;start++)for(let end=start+2;end<=compact.length;end++)if(other.includes(compact.slice(start,end)))longest=Math.max(longest,end-start);let sharedBigrams=0;const bigrams=new Set(compact.match(/.{2}/gu)||[]);for(const gram of bigrams)if(other.includes(gram))sharedBigrams++;return{candidate,candidateIndex,score:sharedSymbols*30+longest*4+sharedBigrams}}).filter(Boolean).sort((a,b)=>b.score-a.score||a.candidateIndex-b.candidateIndex).slice(0,4).map(item=>item.candidate);
+      const choices=[answer,...related];
       const rotate=(seedIndex*3+mode)%choices.length;
       const options=choices.map((_,i)=>choices[(i+rotate)%choices.length]);
+
       const answerIndex=options.indexOf(answer);
       bank.push({id:seedIndex*10+mode,answer,clue:tokens.join(' '),hint:hints[mode],options,answerIndex});
     }
@@ -173,7 +176,69 @@ function createPatternChallenge() {
   const distractors=shuffledCopy([...set.filter(symbol=>symbol!==answer),...new Set(sets.flat())].filter((symbol,index,all)=>symbol!==answer&&all.indexOf(symbol)===index)).slice(0,4);
   return choiceChallenge(`จับรูปแบบแล้วเลือกตัวถัดไป:  ${sequence.join('  →  ')}  →  ?`,answer,distractors,`pattern-${set.join('')}-${start}-${step}`);
 }
+
+const tabooSeeds=[
+  {answer:'ส้มตำ',forbidden:['มะละกอ','ครก','ปลาร้า','เผ็ด'],options:['ส้มตำ','ตำแตง','ยำมะละกอ','ลาบ','ยำวุ้นเส้น']},
+  {answer:'หมูกระทะ',forbidden:['เตา','หมู','กระทะ','น้ำจิ้ม'],options:['หมูกระทะ','ชาบู','สุกี้','ปิ้งย่าง','แจ่วฮ้อน']},
+  {answer:'ชาบู',forbidden:['หม้อ','น้ำซุป','จุ่ม','เนื้อ'],options:['ชาบู','สุกี้','หมูกระทะ','ปิ้งย่าง','ก๋วยเตี๋ยวเรือ']},
+  {answer:'กาแฟ',forbidden:['คาเฟอีน','เมล็ด','ชง','ขม'],options:['กาแฟ','ชา','โกโก้','มัทฉะ','นมสด']},
+  {answer:'ชาไทย',forbidden:['สีส้ม','นมข้น','เย็น','ใบชา'],options:['ชาไทย','ชานมไต้หวัน','ชาเขียว','โกโก้','กาแฟเย็น']},
+  {answer:'มัทฉะ',forbidden:['ชาเขียว','ญี่ปุ่น','ผง','ตี'],options:['มัทฉะ','ชาเขียว','ชาไทย','โฮจิฉะ','กาแฟ']},
+  {answer:'บิงซู',forbidden:['น้ำแข็ง','เกาหลี','นม','เกล็ด'],options:['บิงซู','น้ำแข็งไส','ไอศกรีม','เฉาก๊วย','ซอฟต์เสิร์ฟ']},
+  {answer:'ก๋วยเตี๋ยวเรือ',forbidden:['ชามเล็ก','น้ำตก','เลือด','เส้น'],options:['ก๋วยเตี๋ยวเรือ','ก๋วยเตี๋ยวต้มยำ','เย็นตาโฟ','บะหมี่เกี๊ยว','ข้าวซอย']},
+  {answer:'ครัวซองต์',forbidden:['ฝรั่งเศส','เนย','แป้ง','ชั้น'],options:['ครัวซองต์','เดนิช','พัฟ','ขนมปัง','พาย']},
+  {answer:'ซูชิ',forbidden:['ญี่ปุ่น','ข้าว','ปลา','วาซาบิ'],options:['ซูชิ','ซาชิมิ','ข้าวปั้น','ข้าวห่อสาหร่าย','เทมากิ']},
+  {answer:'ทะเล',forbidden:['คลื่น','ชายหาด','น้ำเค็ม','ปลา'],options:['ทะเล','มหาสมุทร','อ่าว','เกาะ','แม่น้ำ']},
+  {answer:'น้ำตก',forbidden:['ภูเขา','ไหล','หิน','แอ่งน้ำ'],options:['น้ำตก','ธารน้ำ','แก่ง','ลำธาร','น้ำพุ']},
+  {answer:'ภูเขา',forbidden:['สูง','ยอด','ดอย','ปีน'],options:['ภูเขา','เนินเขา','ดอย','หน้าผา','ที่ราบสูง']},
+  {answer:'สนามบิน',forbidden:['เครื่องบิน','ขึ้น','ลง','กระเป๋า'],options:['สนามบิน','สถานีรถไฟ','ท่าเรือ','สถานีขนส่ง','อาคารผู้โดยสาร']},
+  {answer:'รถไฟฟ้า',forbidden:['สถานี','ราง','บัตร','ขบวน'],options:['รถไฟฟ้า','รถไฟใต้ดิน','รถไฟ','รถราง','รถด่วน']},
+  {answer:'โรงแรม',forbidden:['ห้องพัก','นอน','เช็กอิน','กุญแจ'],options:['โรงแรม','รีสอร์ต','โฮสเทล','เกสต์เฮาส์','เซอร์วิสอพาร์ตเมนต์']},
+  {answer:'แว่นกันแดด',forbidden:['ตา','เลนส์','แสง','ใส่'],options:['แว่นกันแดด','แว่นสายตา','คอนแทคเลนส์','หมวก','หน้ากาก']},
+  {answer:'หูฟัง',forbidden:['เพลง','หู','เสียง','บลูทูธ'],options:['หูฟัง','ลำโพง','เฮดโฟน','ไมโครโฟน','เอียร์บัด']},
+  {answer:'กล้องถ่ายรูป',forbidden:['ภาพ','ถ่าย','เลนส์','ชัตเตอร์'],options:['กล้องถ่ายรูป','กล้องวิดีโอ','มือถือ','กล้องฟิล์ม','กล้องวงจรปิด']},
+  {answer:'ร่ม',forbidden:['ฝน','กาง','เปียก','ด้าม'],options:['ร่ม','เสื้อกันฝน','หมวก','กันสาด','ร่มสนาม']},
+  {answer:'แอร์',forbidden:['เย็น','รีโมต','ห้อง','ลม'],options:['แอร์','พัดลม','เครื่องฟอกอากาศ','ฮีตเตอร์','เครื่องลดความชื้น']},
+  {answer:'ลิฟต์',forbidden:['ขึ้น','ลง','ชั้น','กดปุ่ม'],options:['ลิฟต์','บันไดเลื่อน','บันได','ทางลาด','กระเช้า']},
+  {answer:'ตู้เย็น',forbidden:['แช่','เย็น','อาหาร','ช่องฟรีซ'],options:['ตู้เย็น','ตู้แช่','ไมโครเวฟ','เครื่องทำน้ำแข็ง','กระติกน้ำแข็ง']},
+  {answer:'หมอน',forbidden:['นอน','หนุน','เตียง','นุ่ม'],options:['หมอน','ผ้าห่ม','ที่นอน','เบาะ','หมอนข้าง']},
+  {answer:'แหวน',forbidden:['นิ้ว','เพชร','สวม','แต่งงาน'],options:['แหวน','กำไล','สร้อยคอ','ต่างหู','จี้']},
+  {answer:'น้ำหอม',forbidden:['กลิ่น','ฉีด','ขวด','หอม'],options:['น้ำหอม','โคโลญ','สเปรย์ระงับกลิ่น','โลชั่น','ก้านหอม']},
+  {answer:'เน็ตฟลิกซ์',forbidden:['ดู','ซีรีส์','สตรีม','จอ'],options:['เน็ตฟลิกซ์','ดิสนีย์พลัส','ยูทูบ','ไพรม์วิดีโอ','เอชบีโอ']},
+  {answer:'พอดแคสต์',forbidden:['ฟัง','เสียง','รายการ','ไมค์'],options:['พอดแคสต์','วิทยุ','หนังสือเสียง','ไลฟ์สด','เพลง']},
+  {answer:'แชต',forbidden:['ข้อความ','พิมพ์','ส่ง','แอป'],options:['แชต','โทรศัพท์','วิดีโอคอล','อีเมล','ข้อความเสียง']},
+  {answer:'เซลฟี่',forbidden:['ตัวเอง','กล้องหน้า','ถ่าย','มือถือ'],options:['เซลฟี่','ภาพหมู่','ภาพบุคคล','ภาพสะท้อน','ภาพแคนดิด']},
+  {answer:'วันครบรอบ',forbidden:['วันที่','จำ','คบกัน','ฉลอง'],options:['วันครบรอบ','วันเกิด','วันวาเลนไทน์','วันแต่งงาน','วันแรกที่เจอ']},
+  {answer:'ของขวัญ',forbidden:['ให้','ห่อ','เซอร์ไพรส์','แกะ'],options:['ของขวัญ','ของฝาก','ของที่ระลึก','การ์ด','ดอกไม้']},
+  {answer:'ทะเลาะกัน',forbidden:['โกรธ','เถียง','ไม่เข้าใจ','งอน'],options:['ทะเลาะกัน','งอน','เถียงกัน','เข้าใจผิด','ประชด']},
+  {answer:'คิดถึง',forbidden:['ห่าง','อยากเจอ','ไกล','เหงา'],options:['คิดถึง','เป็นห่วง','เหงา','รัก','โหยหา']},
+  {answer:'เดต',forbidden:['แฟน','นัด','เที่ยว','สองคน'],options:['เดต','ทริป','ปาร์ตี้','กินข้าว','ดูหนัง']},
+  {answer:'คำสัญญา',forbidden:['พูด','รับปาก','ทำ','อนาคต'],options:['คำสัญญา','ข้อตกลง','คำขอ','คำขอโทษ','คำมั่น']},
+  {answer:'เงินเก็บ',forbidden:['ออม','ธนาคาร','ฝาก','อนาคต'],options:['เงินเก็บ','เงินลงทุน','เงินฉุกเฉิน','เงินเดือน','เงินสด']},
+  {answer:'ทำงานล่วงเวลา',forbidden:['ออฟฟิศ','ดึก','เจ้านาย','โอที'],options:['ทำงานล่วงเวลา','ทำงานกะดึก','ทำงานวันหยุด','ประชุมด่วน','รับงานเพิ่ม']},
+  {answer:'วันหยุด',forbidden:['ทำงาน','พัก','เสาร์','อาทิตย์'],options:['วันหยุด','วันลา','วันนักขัตฤกษ์','วันพักร้อน','วันหยุดยาว']},
+  {answer:'รถติด',forbidden:['ถนน','รถ','ช้า','แยก'],options:['รถติด','รถติดไฟแดง','รถชน','ปิดถนน','รถเสีย']},
+  {answer:'ฝนตก',forbidden:['เปียก','เมฆ','ร่ม','น้ำ'],options:['ฝนตก','ฝนปรอย','พายุ','ฝนฟ้าคะนอง','หมอกลง']},
+  {answer:'พระอาทิตย์ตก',forbidden:['เย็น','ขอบฟ้า','แสง','พระอาทิตย์ขึ้น'],options:['พระอาทิตย์ตก','พระอาทิตย์ขึ้น','แสงสนธยา','พลบค่ำ','รุ่งสาง']},
+  {answer:'หมา',forbidden:['เห่า','หาง','ซื่อสัตย์','สุนัข'],options:['หมา','หมาป่า','จิ้งจอก','แมว','สุนัขจิ้งจอก']},
+  {answer:'แมว',forbidden:['เหมียว','หนวด','ขน','ร้อง'],options:['แมว','เสือ','แมวป่า','สุนัข','ลิง']},
+  {answer:'ยุง',forbidden:['กัด','คัน','เลือด','บิน'],options:['ยุง','แมลงวัน','ริ้น','ผึ้ง','ตัวเรือด']},
+  {answer:'งู',forbidden:['เลื้อย','พิษ','ลิ้น','ฉก'],options:['งู','ปลาไหล','กิ้งก่า','จิ้งจก','ตะกวด']},
+  {answer:'หอยทาก',forbidden:['ช้า','เปลือก','เมือก','ฝน'],options:['หอยทาก','ทาก','หอยโข่ง','หอยเชอรี่','ปูเสฉวน']},
+  {answer:'กีตาร์',forbidden:['ดีด','สาย','เพลง','คอร์ด'],options:['กีตาร์','อูคูเลเล่','เบส','ไวโอลิน','พิณ']},
+  {answer:'เปียโน',forbidden:['คีย์','กด','เพลง','คีย์บอร์ด'],options:['เปียโน','คีย์บอร์ด','ออร์แกน','เมโลเดียน','ฮาร์ป']},
+  {answer:'ฟุตบอล',forbidden:['ประตู','เตะ','ลูกบอล','สนาม'],options:['ฟุตบอล','ฟุตซอล','รักบี้','แฮนด์บอล','บาสเกตบอล']},
+  {answer:'แบดมินตัน',forbidden:['ลูกขนไก่','ตบ','เน็ต','ไม้'],options:['แบดมินตัน','เทนนิส','สควอช','ปิงปอง','พิคเคิลบอล']}
+];
+function createTabooChallenge(used=[]){
+  const available=tabooSeeds.map((_,index)=>index).filter(index=>!used.includes('taboo-'+index));
+  const index=available[Math.floor(Math.random()*available.length)]??Math.floor(Math.random()*tabooSeeds.length),seed=tabooSeeds[index];
+  const options=shuffledCopy(seed.options);
+  return{id:'taboo-'+index,prompt:'ฟังคำใบ้จากอีกคน แล้วเลือกคำเป้าหมาย',target:seed.answer,forbidden:[...seed.forbidden],options,answer:options.indexOf(seed.answer)};
+}
+
 function createChallenge(type,used=[]) {
+  if(type==='taboo')return createTabooChallenge(used);
   if(type==='math')return createMathChallenge(typeof selectedMathDifficulty==='string'?selectedMathDifficulty:'medium');
   if(type==='logic')return createLogicChallenge();
   if(type==='word')return createWordChallenge(used);
